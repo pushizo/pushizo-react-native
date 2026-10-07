@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noUnusedLocals": false, "noUnusedParameters": false, "isolatedModules": true },
+  "include": ["src", "plugin/src", "plugin/__tests__"]
+}
