@@ -44,8 +44,6 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
     private var foregroundHandlerEnabled = false
     private var foregroundEvents: [String: HSForegroundEvent] = [:]
     private var lastState: [String: Any]?
-    private var lastPermission: Bool?
-    private var activeObserver: NSObjectProtocol?
 
     // MARK: - Erken başlatma (ObjC +load → UIApplicationDidFinishLaunchingNotification)
 
@@ -153,19 +151,16 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
             self?.emit(Self.eventInAppClick, ["messageId": e.messageId, "actionId": e.actionId, "url": e.url ?? NSNull()])
         }
         HeroSignal.InAppMessages.addLifecycleListener(self)
-
-        // Ayarlardan izin değişimi: uygulama ön plana dönünce kontrol edilir.
-        activeObserver = NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.refreshPermission()
+        // Yerel SDK izin gözlemcisi: requestPermission sonrası ve uygulama yeniden etkinleştiğinde (izin Ayarlar'dan
+        // değişmiş olabilir) etkin izin değiştiyse çağrılır.
+        HeroSignal.Notifications.addPermissionObserver { [weak self] granted in
+            self?.emit(Self.eventPermission, ["permission": granted])
         }
         Task { [weak self] in
             let state = await HeroSignal.User.pushSubscription.state()
             self?.onMain {
                 guard let self else { return }
-                if self.lastState == nil {
-                    self.lastState = Self.map(state)
-                    self.lastPermission = Self.granted(state.permission)
-                }
+                if self.lastState == nil { self.lastState = Self.map(state) }
             }
         }
     }
@@ -173,24 +168,9 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
     private func onSubscriptionState(_ s: HSPushSubscriptionState) {
         let current = Self.map(s)
         let previous = lastState
-        let permission = Self.granted(s.permission)
-        let permissionChanged = lastPermission != nil && lastPermission != permission
         lastState = current
-        lastPermission = permission
         if previous.map({ !NSDictionary(dictionary: $0).isEqual(to: current) }) ?? true {
             emit(Self.eventSubscription, ["previous": previous ?? current, "current": current])
-        }
-        if permissionChanged { emit(Self.eventPermission, ["permission": permission]) }
-    }
-
-    private func refreshPermission() {
-        guard HeroSignal.isInitialized else { return }
-        Task { [weak self] in
-            let state = await HeroSignal.User.pushSubscription.state()
-            self?.onMain {
-                guard let self, let last = self.lastPermission, last != Self.granted(state.permission) else { return }
-                self.onSubscriptionState(state)
-            }
         }
     }
 

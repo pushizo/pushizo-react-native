@@ -48,7 +48,6 @@ object HeroSignalBridge {
     private val pendingClicks = ArrayList<Map<String, Any?>>()
     private val foregroundEvents = ConcurrentHashMap<String, HsForegroundEvent>()
     private var lastState: Map<String, Any?>? = null
-    private var lastPermission: Boolean? = null
 
     // --- Başlatma ---
 
@@ -69,13 +68,11 @@ object HeroSignalBridge {
         HeroSignal.Notifications.addClickListener(clickListener)
         HeroSignal.Notifications.addForegroundLifecycleListener(foregroundListener)
         HeroSignal.User.pushSubscription.addObserver(subscriptionObserver)
+        HeroSignal.Notifications.addPermissionObserver(permissionObserver)
         HeroSignal.InAppMessages.addClickListener(inAppClickListener)
         HeroSignal.InAppMessages.addLifecycleListener(inAppLifecycleListener)
         val state = HeroSignal.User.pushSubscription.state
-        synchronized(lock) {
-            lastState = state.toMap()
-            lastPermission = state.permission
-        }
+        synchronized(lock) { lastState = state.toMap() }
     }
 
     // --- Sink yönetimi ---
@@ -149,24 +146,18 @@ object HeroSignalBridge {
     private fun onSubscriptionState(s: HsPushSubscriptionState) {
         val current = s.toMap()
         val previous: Map<String, Any?>?
-        val permissionChanged: Boolean
         synchronized(lock) {
             previous = lastState
-            permissionChanged = lastPermission != null && lastPermission != s.permission
             lastState = current
-            lastPermission = s.permission
         }
         if (previous != current) emit(EVENT_SUBSCRIPTION, mapOf("previous" to (previous ?: current), "current" to current))
-        if (permissionChanged) emit(EVENT_PERMISSION, mapOf("permission" to s.permission))
     }
 
-    /** Uygulama ön plana döndüğünde izin ayarlardan değişmiş olabilir. */
-    fun refreshPermission() {
-        if (!HeroSignal.isInitialized) return
-        val permission = HeroSignal.Notifications.permission
-        val changed = synchronized(lock) { lastPermission != null && lastPermission != permission }
-        if (changed) onSubscriptionState(HeroSignal.User.pushSubscription.state)
-    }
+    /**
+     * Yerel SDK izin gözlemcisi: `requestPermission` sonucu ve uygulama ön plana döndüğünde (izin ayarlardan
+     * değişmiş olabilir) etkin izin değiştiyse çağrılır.
+     */
+    private val permissionObserver: (Boolean) -> Unit = { granted -> emit(EVENT_PERMISSION, mapOf("permission" to granted)) }
 
     private val inAppClickListener: (HsInAppClickEvent) -> Unit = { e ->
         emit(EVENT_IN_APP_CLICK, mapOf("messageId" to e.messageId, "actionId" to e.actionId, "url" to e.url))

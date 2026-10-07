@@ -208,6 +208,10 @@ Olaylar: `HeroSignal-notificationClick`, `HeroSignal-notificationWillDisplay`, `
 `HeroSignal-pushSubscriptionChange`, `HeroSignal-inAppClick`, `HeroSignal-inAppLifecycle`. In-app mesajlar yerel
 SDK'nın varsayılan çizimiyle (Android Dialog, iOS UIWindow) gösterilir.
 
+`HeroSignal-permissionChange` yerel SDK izin gözlemcisinden (`HeroSignal.Notifications.addPermissionObserver`, Android ve
+iOS) üretilir: izin isteği sonuçlandığında ve uygulama ön plana döndüğünde izin ayarlardan değiştiyse yalnızca gerçek
+değişiklikte gönderilir; köprü kendi izin yoklaması yapmaz.
+
 ## Geliştirme
 
 Paket kök workspace'e dahil değildir:

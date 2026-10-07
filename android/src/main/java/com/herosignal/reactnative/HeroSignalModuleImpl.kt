@@ -3,7 +3,6 @@ package com.herosignal.reactnative
 import android.Manifest
 import android.os.Build
 import com.facebook.react.bridge.Arguments
-import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReadableArray
@@ -19,18 +18,16 @@ import com.herosignal.sdk.HsCallback
  * Yeni (TurboModule) ve eski mimari modüllerinin ortak gövdesi: JS çağrılarını Android SDK'ya (`com.herosignal.sdk`)
  * iletir. Doğrulama hataları `INVALID_ARGUMENT`, başlatılmamış SDK `NOT_READY`, API hataları sunucu hata koduyla reddedilir.
  */
-class HeroSignalModuleImpl(private val context: ReactApplicationContext) : LifecycleEventListener {
+class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
     private val sink = HeroSignalBridge.Sink { event, payload ->
         if (context.hasActiveReactInstance()) context.emitDeviceEvent(event, Arguments.makeNativeMap(payload))
     }
 
     init {
         HeroSignalBridge.attach(sink)
-        context.addLifecycleEventListener(this)
     }
 
     fun invalidate() {
-        context.removeLifecycleEventListener(this)
         HeroSignalBridge.detach(sink)
     }
 
@@ -143,8 +140,8 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) : Lifec
         }
         val listener = PermissionListener { requestCode, _, _ ->
             if (requestCode != HeroSignal.Notifications.PERMISSION_REQUEST_CODE) return@PermissionListener false
+            // İzin değiştiyse yerel SDK izin gözlemcisi `permissionChange` olayını gönderir.
             HeroSignal.Notifications.onPermissionResult()
-            HeroSignalBridge.refreshPermission()
             promise.resolve(HeroSignal.Notifications.permission)
             true
         }
@@ -210,12 +207,6 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) : Lifec
     // --- NativeEventEmitter ---
 
     fun addListener(eventName: String) = HeroSignalBridge.onJsListenerAdded(eventName)
-
-    // --- LifecycleEventListener ---
-
-    override fun onHostResume() = HeroSignalBridge.refreshPermission()
-    override fun onHostPause() = Unit
-    override fun onHostDestroy() = Unit
 
     // --- Yardımcılar ---
 
