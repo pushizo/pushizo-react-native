@@ -1,0 +1,94 @@
+// HeroSignal React Native Android modülü.
+// Native SDK bağımlılığı: uygulamanın settings.gradle'ında ":herosignal" projesi varsa (monorepo / yerel geliştirme)
+// kaynaktan, yoksa yayınlanmış artefakttan (Maven Central veya `publishToMavenLocal`) alınır.
+
+buildscript {
+    // Yalnızca modül tek başına derlenirken (uygulama içinde değil) Android/Kotlin eklentileri buradan gelir.
+    if (project == rootProject) {
+        repositories {
+            google()
+            mavenCentral()
+        }
+        dependencies {
+            classpath("com.android.tools.build:gradle:8.11.1")
+            classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20")
+        }
+    }
+}
+
+def safeExtGet(String name, Object fallback) {
+    return rootProject.ext.has(name) ? rootProject.ext.get(name) : fallback
+}
+
+def isNewArchitectureEnabled() {
+    return rootProject.hasProperty("newArchEnabled") && rootProject.getProperty("newArchEnabled") == "true"
+}
+
+def herosignalAndroidVersion = project.findProperty("herosignalAndroidVersion") ?: "0.1.0"
+
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+
+if (isNewArchitectureEnabled()) {
+    apply plugin: "com.facebook.react"
+}
+
+android {
+    namespace "com.herosignal.reactnative"
+    compileSdkVersion safeExtGet("compileSdkVersion", 35)
+
+    defaultConfig {
+        minSdkVersion safeExtGet("minSdkVersion", 24)
+        targetSdkVersion safeExtGet("targetSdkVersion", 35)
+        buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", isNewArchitectureEnabled().toString()
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    sourceSets {
+        main {
+            if (isNewArchitectureEnabled()) {
+                // Codegen çıktısı (NativeHeroSignalSpec) com.facebook.react eklentisi tarafından üretilir.
+                java.srcDirs += ["build/generated/source/codegen/java"]
+            } else {
+                java.srcDirs += ["src/oldarch/java"]
+            }
+        }
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    // Sürüm uygulamanın React Native Gradle eklentisi tarafından belirlenir.
+    implementation "com.facebook.react:react-android"
+
+    if (rootProject.findProject(":herosignal") != null) {
+        api project(":herosignal")
+    } else {
+        api "com.herosignal:herosignal-android:${herosignalAndroidVersion}"
+    }
+}
+
+if (isNewArchitectureEnabled()) {
+    react {
+        jsRootDir = file("../src/")
+        libraryName = "RNHeroSignalSpec"
+        codegenJavaPackageName = "com.herosignal.reactnative"
+    }
+}

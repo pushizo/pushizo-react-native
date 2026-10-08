@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- İzinler, FCM servisi ve bildirim Activity'si native SDK (com.herosignal:herosignal-android) manifestinden birleşir. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

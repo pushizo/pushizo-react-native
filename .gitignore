@@ -1,0 +1,3 @@
+# Derleme çıktıları (npm run build / prepare)
+lib/
+plugin/build/
