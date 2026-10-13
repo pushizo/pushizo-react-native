@@ -214,7 +214,8 @@ describe('iOS dönüşümleri', () => {
   });
 
   test('Podfile: NSE hedefi ve monorepo yolu; tekrar uygulamada tek blok', () => {
-    const podfile = fs.readFileSync(path.join(FIXTURES, 'ios', 'Podfile'), 'utf8');
+    // Windows'ta `core.autocrlf` fikstürü CRLF ile çıkarır; beklenen desenler LF'dir.
+    const podfile = fs.readFileSync(path.join(FIXTURES, 'ios', 'Podfile'), 'utf8').replace(/\r\n/g, '\n');
     const p = validateProps({ ...BASE, iosSdkPath: '../../../sdk/ios' });
     const out = applyPodfile(applyPodfile(podfile, p), p);
     expect(out.match(/target 'HeroSignalNotificationServiceExtension' do/g)).toHaveLength(1);
