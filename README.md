@@ -90,16 +90,17 @@ Ardından `npx expo prebuild` (veya EAS Build). Plugin şunları yapar:
 
 | Platform | Değişiklik |
 |----------|------------|
-| iOS | `aps-environment` (`mode`: `development` / `production`), Background Modes → `remote-notification`, App Group (`iosAppGroup`, varsayılan `group.<bundle id>.herosignal`), AppDelegate'e APNs token iletimi, Info.plist `HeroSignalAppId` / `HeroSignalApiUrl` / `HeroSignalAppGroup` |
+| iOS | `aps-environment` (`mode`: `development` / `production`), Background Modes → `remote-notification`, App Group (`iosAppGroup`, varsayılan `group.<bundle id>.herosignal`), AppDelegate'e APNs token iletimi, Info.plist `HeroSignalAppId` / `HeroSignalApiUrl` / `HeroSignalAppGroup` / `HeroSignalRequiresPrivacyConsent` / `HeroSignalLogLevel` (erken başlatma bunları JS yüklenmeden uygular) |
 | iOS | `HeroSignalNotificationServiceExtension` hedefi (dosyalar `plugin/templates`), Podfile'a `HeroSignal/Extension` |
-| Android | `POST_NOTIFICATIONS`, küçük ikon (PNG'den tüm yoğunluklar), vurgu rengi, erken başlatma meta-data'sı; `android.googleServicesFile` yoksa uyarı |
+| Android | `POST_NOTIFICATIONS`, küçük ikon (PNG'den tüm yoğunluklar), vurgu rengi, erken başlatma meta-data'sı (onay, günlük seviyesi, varsayılan kanal) |
+| Android | `android.googleServicesFile` verilmişse dosyayı `android/app/google-services.json` olarak kopyalar, `com.google.gms:google-services` sınıf yolunu ve `com.google.gms.google-services` Gradle eklentisini ekler (idempotent; Expo'nun kendi adımıyla çakışmaz). Dosya yoksa prebuild açık hatayla durur; alan hiç verilmemişse uyarı verilir. |
 
 | Seçenek | Tip | Açıklama |
 |---------|-----|----------|
 | `mode` | `development` \| `production` | **Zorunlu.** APNs ortamı. TestFlight/App Store için `production`. |
 | `appId` | string | Erken başlatma ve NSE için. NSE açıkken zorunlu. |
 | `apiUrl` | string | Kendi barındırma API adresi. |
-| `requiresPrivacyConsent` | boolean | Erken başlatmada onay bekle (JS `initialize` ile aynı olmalı). |
+| `requiresPrivacyConsent` | boolean | Erken başlatmada onay bekle (JS `initialize` ile aynı olmalı). `true` iken SDK, `setConsentGiven(true)` gelene kadar ağa çıkmaz — JS yüklenmeden önce de. |
 | `logLevel` | `none`…`debug` | Erken başlatma günlük seviyesi. |
 | `iosAppGroup` | string | `group.` ile başlayan App Group. |
 | `iosNotificationServiceExtension` | boolean | NSE hedefi (varsayılan `true`). |
@@ -108,6 +109,7 @@ Ardından `npx expo prebuild` (veya EAS Build). Plugin şunları yapar:
 | `iosSdkPath` / `androidSdkPath` | string | Monorepo: yerel SDK'ları kaynaktan bağlar. |
 | `androidSmallIcon` | string | PNG (beyaz şekil, saydam arka plan). |
 | `androidAccentColor` | `#RRGGBB` | Bildirim vurgu rengi. |
+| `androidDefaultChannelId` / `androidDefaultChannelName` | string | Erken başlatmada varsayılan bildirim kanalı (JS `defaultChannelId` / `defaultChannelName` ile aynı olmalı). |
 
 Geçersiz seçenekler `prebuild` sırasında hangi alanın nasıl düzeltileceğini söyleyen hatayla durur.
 
@@ -155,6 +157,9 @@ await HeroSignal.Inbox.archive(page.items[0].id);
 
 HeroSignal.Session.sendEvent('purchase', { sku: 'A1' }, 49.9);
 HeroSignal.Notifications.clearAll();
+await HeroSignal.Notifications.removeGroupedNotifications('orders'); // Android android_group / iOS thread-id
+await HeroSignal.Notifications.removeNotification(id);              // Android: notification.androidNotificationId; iOS: UNNotificationRequest.identifier
+const emails = await HeroSignal.User.getEmails();                    // bu cihazda kayıtlı adresler; getSmsNumbers() aynı biçimde
 HeroSignal.Debug.setLogLevel(LogLevel.Debug);
 HeroSignal.logout();
 ```

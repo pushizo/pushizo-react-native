@@ -33,6 +33,10 @@ export interface HeroSignalPluginProps {
   androidSmallIcon?: string;
   /** Bildirim vurgu rengi (`#RRGGBB`). */
   androidAccentColor?: string;
+  /** Erken başlatmada varsayılan Android bildirim kanalı kimliği (JS `defaultChannelId` ile aynı olmalı). */
+  androidDefaultChannelId?: string;
+  /** Erken başlatmada varsayılan Android bildirim kanalının kullanıcıya görünen adı (JS `defaultChannelName`). */
+  androidDefaultChannelName?: string;
 }
 
 export interface ResolvedProps extends HeroSignalPluginProps {
@@ -54,6 +58,8 @@ const KNOWN_KEYS = new Set<keyof HeroSignalPluginProps>([
   'androidSdkPath',
   'androidSmallIcon',
   'androidAccentColor',
+  'androidDefaultChannelId',
+  'androidDefaultChannelName',
 ]);
 
 const PREFIX = '@herosignal/react-native config plugin';
@@ -93,7 +99,7 @@ export function validateProps(input: unknown): ResolvedProps {
     fail('"mode" zorunlu ve "development" ya da "production" olmalı (APNs aps-environment).');
   }
 
-  for (const key of ['appId', 'apiUrl', 'iosAppGroup', 'iosDeploymentTarget', 'devTeam', 'iosSdkPath', 'androidSdkPath', 'androidSmallIcon', 'androidAccentColor']) {
+  for (const key of ['appId', 'apiUrl', 'iosAppGroup', 'iosDeploymentTarget', 'devTeam', 'iosSdkPath', 'androidSdkPath', 'androidSmallIcon', 'androidAccentColor', 'androidDefaultChannelId', 'androidDefaultChannelName']) {
     optionalString(props, key);
   }
   optionalBoolean(props, 'requiresPrivacyConsent');
@@ -117,6 +123,9 @@ export function validateProps(input: unknown): ResolvedProps {
   }
   if (props.androidAccentColor !== undefined && !/^#[0-9A-Fa-f]{6}$/.test(props.androidAccentColor as string)) {
     fail('"androidAccentColor" #RRGGBB biçiminde olmalı (ör. "#FF5A1F").');
+  }
+  if (props.androidDefaultChannelId !== undefined && !/^[A-Za-z0-9._-]{1,100}$/.test(props.androidDefaultChannelId as string)) {
+    fail('"androidDefaultChannelId" yalnızca harf, rakam, nokta, alt çizgi ve tire içermeli (en çok 100 karakter, ör. "herosignal_default").');
   }
   if (props.androidSmallIcon !== undefined && !/\.png$/i.test(props.androidSmallIcon as string)) {
     fail('"androidSmallIcon" bir PNG dosyası olmalı (beyaz şekil + saydam arka plan).');

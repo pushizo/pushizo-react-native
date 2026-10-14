@@ -32,6 +32,18 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
     /// Info.plist anahtarları (Expo config plugin yazar; bare RN'de elle eklenebilir).
     static let plistAppId = "HeroSignalAppId"
     static let plistApiUrl = "HeroSignalApiUrl"
+    static let plistRequiresConsent = "HeroSignalRequiresPrivacyConsent"
+    static let plistLogLevel = "HeroSignalLogLevel"
+
+    /// Info.plist mantıksal değeri: `<true/>`/`<false/>` ya da elle yazılmış "YES"/"true"/"1" metinleri.
+    static func plistBool(_ key: String) -> Bool? {
+        switch Bundle.main.object(forInfoDictionaryKey: key) {
+        case let value as Bool: return value
+        case let value as NSNumber: return value.boolValue
+        case let value as String: return ["yes", "true", "1"].contains(value.lowercased())
+        default: return nil
+        }
+    }
 
     private static let maxPendingClicks = 10
 
@@ -52,6 +64,9 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
         let apiUrl = Bundle.main.object(forInfoDictionaryKey: Self.plistApiUrl) as? String
         var options: [String: Any] = [:]
         if let apiUrl, !apiUrl.isEmpty { options["apiUrl"] = apiUrl }
+        // Onay bayrağı SDK başlamadan uygulanmalı; aksi halde JS `initialize` gelene kadar onaysız ağ isteği yapılabilir.
+        if let consent = Self.plistBool(Self.plistRequiresConsent) { options["requiresPrivacyConsent"] = consent }
+        if let level = Bundle.main.object(forInfoDictionaryKey: Self.plistLogLevel) as? String, !level.isEmpty { options["logLevel"] = level }
         let launch = launchOptions as? [UIApplication.LaunchOptionsKey: Any]
         onMain { self.start(appId: appId, options: options, launchOptions: launch) }
     }
@@ -237,6 +252,9 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
 
     @objc public func externalId() -> String? { HeroSignal.User.externalId }
     @objc public func userId() -> String? { HeroSignal.User.id }
+    /// Bu cihazda kaydedilmiş e-posta adresleri ve SMS numaraları (yerel kayıt).
+    @objc public func emails() -> [String] { HeroSignal.User.emails }
+    @objc public func smsNumbers() -> [String] { HeroSignal.User.smsNumbers }
 
     // MARK: - Tercihler (ADR-0019 §4; abonelik yoksa NOT_READY, geçersiz girdi INVALID_ARGUMENT)
 
@@ -279,6 +297,21 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
     }
 
     @objc public func clearAll() { HeroSignal.Notifications.clearAll() }
+
+    /// Tek bildirimi istek kimliğiyle (`UNNotificationRequest.identifier`) bildirim merkezinden kaldırır.
+    @objc public func removeNotification(_ identifier: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        let trimmed = identifier.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { reject("INVALID_ARGUMENT", "identifier gerekli", nil); return }
+        HeroSignal.Notifications.removeNotification(identifier: trimmed)
+        resolve(nil)
+    }
+
+    /// Aynı `thread-id`'ye sahip bildirimleri bildirim merkezinden kaldırır.
+    @objc public func removeGroupedNotifications(_ group: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        guard !group.trimmingCharacters(in: .whitespaces).isEmpty else { reject("INVALID_ARGUMENT", "group gerekli", nil); return }
+        HeroSignal.Notifications.removeGroupedNotifications(group)
+        resolve(nil)
+    }
 
     @objc public func setForegroundHandlerEnabled(_ enabled: Bool) { onMain { self.foregroundHandlerEnabled = enabled } }
 
@@ -417,7 +450,9 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
 
     private static func map(_ n: HSNotification) -> [String: Any] {
         ["title": n.title ?? NSNull(), "body": n.body ?? NSNull(), "url": n.url ?? NSNull(), "imageUrl": n.imageUrl ?? NSNull(),
-         "deliveryId": n.deliveryId ?? NSNull(), "messageId": n.messageId ?? NSNull(), "data": n.data]
+         "deliveryId": n.deliveryId ?? NSNull(), "messageId": n.messageId ?? NSNull(), "data": n.data,
+         // Tepsi kimliği yalnızca Android'de vardır (JS sözleşmesinde alan iki platformda da bulunur).
+         "androidNotificationId": NSNull()]
     }
 
     private static func map(_ s: HSPushSubscriptionState) -> [String: Any] {

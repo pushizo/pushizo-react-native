@@ -1,6 +1,7 @@
 /**
  * Expo config plugin testleri: seçenek doğrulaması, saf dönüşümler ve gerçek bir proje kopyası üzerinde tüm mod zinciri
- * (`compileModsAsync`). Fikstürler examples/react-native projesinin ios/android dosyalarının kopyasıdır.
+ * (`compileModsAsync`). Fikstürler examples/react-native projesinin ios/android dosyalarının kopyasıdır; Gradle
+ * dosyalarından google-services satırları çıkarılmıştır (temiz Expo prebuild şablonu gibi).
  */
 import { AndroidConfig, compileModsAsync, type ExportedConfig, WarningAggregator, XML } from '@expo/config-plugins';
 import * as fs from 'fs';
@@ -10,8 +11,8 @@ import * as xcode from 'xcode';
 import type { XCBuildConfiguration } from 'xcode';
 import * as zlib from 'zlib';
 import withHeroSignal from '../src';
-import { applyAndroidManifest, applySettingsGradle, ICON_RESOURCE, ICON_SIZES, META } from '../src/android';
-import { addNseTarget, applyAppDelegate, applyEntitlements, applyInfoPlist, applyPodfile, buildNseInfoPlist, NSE_TARGET } from '../src/ios';
+import { applyAndroidManifest, applySettingsGradle, copyGoogleServicesFile, ICON_RESOURCE, ICON_SIZES, META } from '../src/android';
+import { addNseTarget, applyAppDelegate, applyEntitlements, applyInfoPlist, applyPodfile, buildNseInfoPlist, NSE_TARGET, PLIST } from '../src/ios';
 import { validateProps } from '../src/props';
 
 
@@ -61,8 +62,12 @@ function tempProject(): string {
   fs.cpSync(FIXTURES, dir, { recursive: true });
   fs.mkdirSync(path.join(dir, 'assets'));
   writePng(path.join(dir, 'assets', 'notification-icon.png'));
+  fs.writeFileSync(path.join(dir, 'google-services.json'), GOOGLE_SERVICES);
   return dir;
 }
+
+/** Yapısı Firebase konsolu çıktısına benzeyen test fikstürü (gizli bilgi içermez). */
+const GOOGLE_SERVICES = JSON.stringify({ project_info: { project_number: '1', project_id: 'herosignal-example' }, client: [] });
 
 function baseConfig(): ExportedConfig {
   return {
@@ -136,6 +141,8 @@ describe('validateProps', () => {
     [{ ...BASE, iosDeploymentTarget: '13.0' }, '"iosDeploymentTarget"'],
     [{ ...BASE, logLevel: 'trace' }, '"logLevel"'],
     [{ ...BASE, requiresPrivacyConsent: 'yes' }, '"requiresPrivacyConsent"'],
+    [{ ...BASE, androidDefaultChannelId: 'kanal adı' }, '"androidDefaultChannelId"'],
+    [{ ...BASE, androidDefaultChannelName: '' }, '"androidDefaultChannelName"'],
   ])('geçersiz seçenek açık hata verir: %j', (input, message) => {
     expect(() => validateProps(input)).toThrow(message);
   });
@@ -171,7 +178,33 @@ describe('iOS dönüşümleri', () => {
       HeroSignalAppGroup: 'group.x',
       HeroSignalAppId: 'app_test_123',
       HeroSignalApiUrl: 'https://api.example.com',
+      HeroSignalRequiresPrivacyConsent: false,
     });
+  });
+
+  test('Info.plist: onay bayrağı ve günlük seviyesi erken başlatma için yazılır, appId yoksa kaldırılır', () => {
+    const consent = validateProps({ ...BASE, requiresPrivacyConsent: true, logLevel: 'warn' });
+    const p = applyInfoPlist<Record<string, unknown>>({}, consent, 'group.x');
+    expect(p[PLIST.requiresConsent]).toBe(true);
+    expect(p[PLIST.logLevel]).toBe('warn');
+    const cleared = applyInfoPlist(p, validateProps({ mode: 'development', iosNotificationServiceExtension: false }), 'group.x');
+    expect(cleared).not.toHaveProperty(PLIST.requiresConsent);
+    expect(cleared).not.toHaveProperty(PLIST.logLevel);
+    expect(cleared).not.toHaveProperty(PLIST.appId);
+  });
+
+  test('yerel köprüler plugin anahtarlarını okur (Info.plist ve manifest sözleşmesi)', () => {
+    const root = path.join(__dirname, '..', '..');
+    const swift = fs.readFileSync(path.join(root, 'ios', 'HeroSignalRNBridge.swift'), 'utf8');
+    for (const key of [PLIST.appId, PLIST.apiUrl, PLIST.requiresConsent, PLIST.logLevel]) expect(swift).toContain(`"${key}"`);
+    expect(swift).toMatch(/autoInitialize[\s\S]*plistRequiresConsent[\s\S]*plistLogLevel[\s\S]*self\.start\(/);
+    const kotlin = fs.readFileSync(
+      path.join(root, 'android', 'src', 'main', 'java', 'com', 'herosignal', 'reactnative', 'HeroSignalInitProvider.kt'),
+      'utf8',
+    );
+    for (const key of [META.appId, META.apiUrl, META.requiresConsent, META.logLevel, META.channelId, META.channelName]) {
+      expect(kotlin).toContain(`"${key}"`);
+    }
   });
 
   test('AppDelegate (Expo Swift): import ve super çağıran override eklenir, idempotent', () => {
@@ -272,7 +305,16 @@ describe('Android dönüşümleri', () => {
   test('POST_NOTIFICATIONS, ikon/renk ve erken başlatma meta-data', async () => {
     const m = applyAndroidManifest(
       await manifest(),
-      validateProps({ ...BASE, apiUrl: 'https://api.example.com', logLevel: 'debug', androidSmallIcon: './icon.png', androidAccentColor: '#FF5A1F' }),
+      validateProps({
+        ...BASE,
+        apiUrl: 'https://api.example.com',
+        logLevel: 'debug',
+        requiresPrivacyConsent: true,
+        androidSmallIcon: './icon.png',
+        androidAccentColor: '#FF5A1F',
+        androidDefaultChannelId: 'campaigns',
+        androidDefaultChannelName: 'Kampanyalar',
+      }),
     );
     expect(AndroidConfig.Permissions.getPermissions(m)).toContain('android.permission.POST_NOTIFICATIONS');
     const meta = Object.fromEntries(
@@ -283,9 +325,24 @@ describe('Android dönüşümleri', () => {
       [META.color]: '@color/herosignal_notification_color',
       [META.appId]: 'app_test_123',
       [META.apiUrl]: 'https://api.example.com',
-      [META.requiresConsent]: 'false',
+      [META.requiresConsent]: 'true',
       [META.logLevel]: 'debug',
+      [META.channelId]: 'campaigns',
+      [META.channelName]: 'Kampanyalar',
     });
+  });
+
+  test('google-services.json android/app altına kopyalanır; dosya yoksa alanı söyleyen hata', async () => {
+    const projectRoot = tempProject();
+    try {
+      const target = await copyGoogleServicesFile({ android: { googleServicesFile: './google-services.json' } }, projectRoot);
+      expect(fs.readFileSync(target, 'utf8')).toBe(GOOGLE_SERVICES);
+      await expect(copyGoogleServicesFile({ android: { googleServicesFile: './yok.json' } }, projectRoot)).rejects.toThrow(
+        '"android.googleServicesFile" dosyası bulunamadı',
+      );
+    } finally {
+      fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
   });
 
   test('appId/ikon verilmezse eski meta-data kaldırılır', async () => {
@@ -339,6 +396,19 @@ describe('tüm mod zinciri (compileModsAsync)', () => {
       const manifest = fs.readFileSync(path.join(projectRoot, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'), 'utf8');
       expect(manifest).toContain('android.permission.POST_NOTIFICATIONS');
       expect(manifest).toContain(`android:name="${META.appId}" android:value="app_test_123"`);
+
+      // FCM: google-services.json kopyalanır, sınıf yolu ve Gradle eklentisi eklenir.
+      const android = path.join(projectRoot, 'android');
+      expect(fs.readFileSync(path.join(android, 'app', 'google-services.json'), 'utf8')).toBe(GOOGLE_SERVICES);
+      expect(fs.readFileSync(path.join(android, 'build.gradle'), 'utf8')).toMatch(/classpath 'com\.google\.gms:google-services:[\d.]+'/);
+      const applyPattern = /apply plugin: ['"]com\.google\.gms\.google-services['"]/g;
+      expect(fs.readFileSync(path.join(android, 'app', 'build.gradle'), 'utf8').match(applyPattern)).toHaveLength(1);
+
+      // İkinci prebuild (ve Expo'nun varsayılan eklentileri) aynı satırları çoğaltmaz.
+      const again = withHeroSignal(baseConfig(), { ...BASE, mode: 'production' });
+      await compileModsAsync(again, { projectRoot, platforms: ['android'], introspect: false, assertMissingModProviders: false });
+      expect(fs.readFileSync(path.join(android, 'app', 'build.gradle'), 'utf8').match(applyPattern)).toHaveLength(1);
+      expect(fs.readFileSync(path.join(android, 'build.gradle'), 'utf8').match(/com\.google\.gms:google-services/g)).toHaveLength(1);
     } finally {
       fs.rmSync(projectRoot, { recursive: true, force: true });
     }

@@ -39,6 +39,8 @@ export interface NotificationData {
   messageId: string | null;
   /** Mesajla gönderilen ek veri (`data`). */
   data: Record<string, string>;
+  /** Yalnızca Android: tepsi kimliği (`Notifications.removeNotification` için); iOS'ta null. */
+  androidNotificationId: number | null;
 }
 
 /** Bildirim tıklaması (plan 06 §6.1): `{ notification, result: { actionId, url } }`. */

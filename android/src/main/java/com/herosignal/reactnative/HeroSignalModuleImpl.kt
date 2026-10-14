@@ -106,6 +106,12 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
         promise.resolve(null)
     }
 
+    /** Bu cihazda kaydedilmiş e-posta adresleri (yerel kayıt). */
+    fun getEmails(promise: Promise) = guard(promise) { promise.resolve(Arguments.makeNativeArray(HeroSignal.User.emails)) }
+
+    /** Bu cihazda kaydedilmiş SMS numaraları (E.164, yerel kayıt). */
+    fun getSmsNumbers(promise: Promise) = guard(promise) { promise.resolve(Arguments.makeNativeArray(HeroSignal.User.smsNumbers)) }
+
     fun getExternalId(promise: Promise) = promise.resolve(HeroSignal.User.externalId)
 
     fun getUserId(promise: Promise) = promise.resolve(HeroSignal.User.id)
@@ -159,6 +165,19 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
     }
 
     fun clearAll() = HeroSignal.Notifications.clearAll()
+
+    /** Tek bildirimi `androidNotificationId` ile kaldırır; JS kimliği metin olarak iletir, Android'de tamsayı olmalıdır. */
+    fun removeNotification(id: String, promise: Promise) = guard(promise) {
+        val androidNotificationId = requireNotNull(id.trim().toIntOrNull()) { "Android bildirim kimliği tamsayı olmalı: $id" }
+        HeroSignal.Notifications.removeNotification(androidNotificationId)
+        promise.resolve(null)
+    }
+
+    /** Aynı grup anahtarına (`android_group`) sahip bildirimleri ve grup özetini kaldırır. */
+    fun removeGroupedNotifications(group: String, promise: Promise) = guard(promise) {
+        HeroSignal.Notifications.removeGroupedNotifications(group)
+        promise.resolve(null)
+    }
 
     fun setForegroundHandlerEnabled(enabled: Boolean) {
         HeroSignalBridge.foregroundHandlerEnabled = enabled

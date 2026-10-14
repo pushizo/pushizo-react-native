@@ -91,6 +91,16 @@ class HeroSignalModule(reactContext: ReactApplicationContext) : ReactContextBase
     }
 
     @ReactMethod
+    fun getEmails(promise: Promise) {
+        impl.getEmails(promise)
+    }
+
+    @ReactMethod
+    fun getSmsNumbers(promise: Promise) {
+        impl.getSmsNumbers(promise)
+    }
+
+    @ReactMethod
     fun getExternalId(promise: Promise) {
         impl.getExternalId(promise)
     }
@@ -138,6 +148,16 @@ class HeroSignalModule(reactContext: ReactApplicationContext) : ReactContextBase
     @ReactMethod
     fun clearAll() {
         impl.clearAll()
+    }
+
+    @ReactMethod
+    fun removeNotification(id: String, promise: Promise) {
+        impl.removeNotification(id, promise)
+    }
+
+    @ReactMethod
+    fun removeGroupedNotifications(group: String, promise: Promise) {
+        impl.removeGroupedNotifications(group, promise)
     }
 
     @ReactMethod
