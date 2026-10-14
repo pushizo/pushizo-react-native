@@ -33,6 +33,12 @@ export interface Spec extends TurboModule {
   removeSms(phoneNumber: string): Promise<void>;
   getExternalId(): Promise<string | null>;
   getUserId(): Promise<string | null>;
+  /** Sonuç: { preferences: [{ category, channel, optedIn, explicit, source, updatedAt }], categories: [{ key, name, description, channels, defaultOptedIn }] } */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  getPreferences(): Promise<Object>;
+  /** preferences: [{ category, channel (null = tüm kanallar), optedIn }]; sonuç `getPreferences` ile aynı biçimdedir. */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  setPreferences(preferences: Array<Object>): Promise<Object>;
 
   // --- Push aboneliği ---
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.

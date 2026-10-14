@@ -185,6 +185,20 @@ RCT_EXPORT_METHOD(getUserId:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRe
   resolve([[HeroSignalRNBridge shared] userId]);
 }
 
+#pragma mark - Tercihler
+
+RCT_EXPORT_METHOD(getPreferences:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[HeroSignalRNBridge shared] getPreferences:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(setPreferences:(NSArray *)preferences
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[HeroSignalRNBridge shared] setPreferences:preferences resolve:resolve reject:reject];
+}
+
 #pragma mark - Push aboneliği
 
 RCT_EXPORT_METHOD(getPushSubscriptionState:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)

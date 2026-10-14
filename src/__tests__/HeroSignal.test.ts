@@ -12,6 +12,21 @@ interface MockEnv {
   listenerCount: (event: string) => number;
 }
 
+/** Yerel köprünün tercih sonucu (Android `HsPreferencesResult.toMap()` / iOS `map(HSPreferencesResult)` biçimi). */
+const PREFERENCES_RAW = {
+  preferences: [
+    { category: 'promo', channel: null, optedIn: false, explicit: true, source: 'sdk', updatedAt: 1700000000000 },
+    { category: 'news', channel: 'email', optedIn: true, explicit: false, source: null, updatedAt: null },
+    // Kategorisiz kayıt yerel ayrıştırıcıda olduğu gibi atlanır.
+    { channel: 'sms', optedIn: true },
+  ],
+  categories: [
+    { key: 'promo', name: { tr: 'Kampanyalar', en: 'Promotions' }, description: { tr: 'İndirimler' }, channels: ['email', 'android_push'], defaultOptedIn: false },
+    { key: 'news', name: { en: 'News' }, description: {}, channels: null, defaultOptedIn: true },
+    { name: { en: 'Anahtarsız' } },
+  ],
+};
+
 function createNative(): Record<string, jest.Mock> {
   const resolved = (value: unknown = undefined) => jest.fn(() => Promise.resolve(value));
   return {
@@ -31,6 +46,8 @@ function createNative(): Record<string, jest.Mock> {
     removeSms: resolved(),
     getExternalId: resolved('user_42'),
     getUserId: resolved('hs_1'),
+    getPreferences: resolved(PREFERENCES_RAW),
+    setPreferences: resolved(PREFERENCES_RAW),
     getPushSubscriptionState: resolved({ id: 'sub_1', token: 'tok', optedIn: true, permission: true }),
     optIn: jest.fn(),
     optOut: jest.fn(),
@@ -175,6 +192,76 @@ describe('HeroSignal (React Native)', () => {
     const { HeroSignal, env } = load();
     env.native.addEmail.mockImplementationOnce(() => Promise.reject(Object.assign(new Error('Geçersiz e-posta'), { code: 'INVALID_ARGUMENT' })));
     await expect(HeroSignal.User.addEmail('bozuk')).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
+  test('User.getPreferences: yerel sonuç tipli modele eşlenir', async () => {
+    const { HeroSignal, env } = load();
+    const result = await HeroSignal.User.getPreferences();
+    expect(env.native.getPreferences).toHaveBeenCalledWith();
+    expect(result).toEqual({
+      preferences: [
+        { category: 'promo', channel: null, optedIn: false, explicit: true, source: 'sdk', updatedAt: 1700000000000 },
+        { category: 'news', channel: 'email', optedIn: true, explicit: false, source: null, updatedAt: null },
+      ],
+      categories: [
+        { key: 'promo', name: { tr: 'Kampanyalar', en: 'Promotions' }, description: { tr: 'İndirimler' }, channels: ['email', 'android_push'], defaultOptedIn: false },
+        { key: 'news', name: { en: 'News' }, description: {}, channels: null, defaultOptedIn: true },
+      ],
+    });
+  });
+
+  test('User.getPreferences: boş/eksik yerel sonuç boş listelere düşer; NOT_READY iletilir', async () => {
+    const { HeroSignal, env } = load();
+    env.native.getPreferences.mockImplementationOnce(() => Promise.resolve(null));
+    await expect(HeroSignal.User.getPreferences()).resolves.toEqual({ preferences: [], categories: [] });
+    env.native.getPreferences.mockImplementationOnce(() => Promise.resolve({ preferences: 'bozuk', categories: [null, 3] }));
+    await expect(HeroSignal.User.getPreferences()).resolves.toEqual({ preferences: [], categories: [] });
+    env.native.getPreferences.mockImplementationOnce(() =>
+      Promise.reject(Object.assign(new Error('Abonelik henüz kaydedilmedi'), { code: 'NOT_READY' })),
+    );
+    await expect(HeroSignal.User.getPreferences()).rejects.toMatchObject({ code: 'NOT_READY' });
+  });
+
+  test('User.setPreferences: girdi normalize edilip yerel modüle iletilir, güncel tercihler döner', async () => {
+    const { HeroSignal, env } = load();
+    const result = await HeroSignal.User.setPreferences([
+      { category: 'promo', optedIn: false },
+      { category: 'news', channel: 'email', optedIn: true },
+      { category: 'alerts', channel: null, optedIn: true },
+    ]);
+    expect(env.native.setPreferences).toHaveBeenCalledWith([
+      { category: 'promo', channel: null, optedIn: false },
+      { category: 'news', channel: 'email', optedIn: true },
+      { category: 'alerts', channel: null, optedIn: true },
+    ]);
+    expect(result.preferences).toHaveLength(2);
+    expect(result.categories.map((c) => c.key)).toEqual(['promo', 'news']);
+  });
+
+  test('User.setPreferences: hatalı girdi yerel modüle gitmeden reddedilir', () => {
+    const { HeroSignal, env } = load();
+    const tooMany = Array.from({ length: 101 }, (_, i) => ({ category: `c${i}`, optedIn: true }));
+    expect(() => HeroSignal.User.setPreferences([])).toThrow('1-100');
+    expect(() => HeroSignal.User.setPreferences(tooMany)).toThrow('1-100');
+    expect(() => HeroSignal.User.setPreferences('promo' as never)).toThrow('dizi');
+    expect(() => HeroSignal.User.setPreferences([null as never])).toThrow('preferences[0] bir nesne');
+    expect(() => HeroSignal.User.setPreferences([{ category: ' ', optedIn: true }])).toThrow('preferences[0].category');
+    expect(() => HeroSignal.User.setPreferences([{ category: 'x'.repeat(65), optedIn: true }])).toThrow('category');
+    expect(() => HeroSignal.User.setPreferences([{ category: 'promo', channel: 'push' as never, optedIn: true }])).toThrow('channel');
+    expect(() => HeroSignal.User.setPreferences([{ category: 'a', optedIn: true }, { category: 'b', optedIn: 'yes' as never }])).toThrow(
+      'preferences[1].optedIn',
+    );
+    expect(env.native.setPreferences).not.toHaveBeenCalled();
+  });
+
+  test('User.setPreferences: yerel doğrulama/API hatası uygulamaya iletilir', async () => {
+    const { HeroSignal, env } = load();
+    env.native.setPreferences.mockImplementationOnce(() =>
+      Promise.reject(Object.assign(new Error('Kategori bulunamadı'), { code: 'HS_VALIDATION_ERROR' })),
+    );
+    await expect(HeroSignal.User.setPreferences([{ category: 'missing', optedIn: true }])).rejects.toMatchObject({
+      code: 'HS_VALIDATION_ERROR',
+    });
   });
 
   test('pushSubscription: durum ve değişim olayı', async () => {

@@ -101,6 +101,16 @@ class HeroSignalModule(reactContext: ReactApplicationContext) : ReactContextBase
     }
 
     @ReactMethod
+    fun getPreferences(promise: Promise) {
+        impl.getPreferences(promise)
+    }
+
+    @ReactMethod
+    fun setPreferences(preferences: ReadableArray, promise: Promise) {
+        impl.setPreferences(preferences, promise)
+    }
+
+    @ReactMethod
     fun getPushSubscriptionState(promise: Promise) {
         impl.getPushSubscriptionState(promise)
     }

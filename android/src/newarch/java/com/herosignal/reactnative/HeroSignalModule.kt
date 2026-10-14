@@ -80,6 +80,14 @@ class HeroSignalModule(reactContext: ReactApplicationContext) : NativeHeroSignal
         impl.getUserId(promise)
     }
 
+    override fun getPreferences(promise: Promise) {
+        impl.getPreferences(promise)
+    }
+
+    override fun setPreferences(preferences: ReadableArray, promise: Promise) {
+        impl.setPreferences(preferences, promise)
+    }
+
     override fun getPushSubscriptionState(promise: Promise) {
         impl.getPushSubscriptionState(promise)
     }

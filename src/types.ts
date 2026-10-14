@@ -116,6 +116,50 @@ export interface InboxListOptions {
   cursor?: string | null;
 }
 
+// --- Kullanıcı tercihleri (ADR-0019 §4) ---
+
+/** Tercih kanalları (`null` = tüm kanallar). */
+export const PreferenceChannels = ['ios_push', 'android_push', 'web_push', 'email', 'sms'] as const;
+export type PreferenceChannel = (typeof PreferenceChannels)[number];
+
+/**
+ * Kullanıcı tercihi: kategori × kanal (`null` = tüm kanallar) → opt-in. `explicit` false ise değer kategori
+ * varsayılanından türetilmiştir; `source` kaydı yazan taraftır (sdk, api, preference_center…).
+ */
+export interface UserPreference {
+  category: string;
+  /** `null` (tüm kanallar) veya `PreferenceChannels` değerlerinden biri; ileride eklenecek kanallar da metin olarak gelir. */
+  channel: string | null;
+  optedIn: boolean;
+  explicit: boolean;
+  source: string | null;
+  /** Epoch milisaniye; türetilmiş değerde `null`. */
+  updatedAt: number | null;
+}
+
+/** Mesaj kategorisi: çok dilli ad/açıklama (`dil kodu → metin`), kanal kısıtı (`null` = tümü) ve varsayılan opt-in. */
+export interface PreferenceCategory {
+  key: string;
+  name: Record<string, string>;
+  description: Record<string, string>;
+  channels: string[] | null;
+  defaultOptedIn: boolean;
+}
+
+/** `User.getPreferences` / `User.setPreferences` sonucu: kullanıcının tercihleri ve app'in kategorileri. */
+export interface UserPreferences {
+  preferences: UserPreference[];
+  categories: PreferenceCategory[];
+}
+
+/** `User.setPreferences` girdisi; `channel` verilmezse veya `null` ise tüm kanallar. */
+export interface PreferenceInput {
+  /** Kategori anahtarı (1-64 karakter). */
+  category: string;
+  optedIn: boolean;
+  channel?: PreferenceChannel | null;
+}
+
 /** Yerel olay adları (NativeEventEmitter). Yerel köprülerdeki sabitlerle aynı olmalıdır. */
 export const NativeEvents = {
   Click: 'HeroSignal-notificationClick',
