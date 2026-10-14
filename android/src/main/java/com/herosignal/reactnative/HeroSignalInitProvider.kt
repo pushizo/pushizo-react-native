@@ -23,11 +23,12 @@ class HeroSignalInitProvider : ContentProvider() {
         val appId = meta.getString(META_APP_ID)?.takeIf { it.isNotBlank() } ?: return false
         val defaults = HeroSignal.Options()
         val options = HeroSignal.Options(
-            apiUrl = meta.getString(META_API_URL)?.takeIf { it.isNotBlank() } ?: defaults.apiUrl,
-            requiresPrivacyConsent = meta.getBoolean(META_REQUIRES_CONSENT, defaults.requiresPrivacyConsent),
-            logLevel = meta.getString(META_LOG_LEVEL)?.let { logLevel(it) } ?: defaults.logLevel,
-            defaultChannelName = defaults.defaultChannelName,
-            defaultChannelId = defaults.defaultChannelId,
+            apiUrl = text(meta, META_API_URL) ?: defaults.apiUrl,
+            // Onay bayrağı SDK başlamadan uygulanmalı; aksi halde JS `initialize` gelene kadar onaysız ağ isteği yapılabilir.
+            requiresPrivacyConsent = flag(meta, META_REQUIRES_CONSENT) ?: defaults.requiresPrivacyConsent,
+            logLevel = text(meta, META_LOG_LEVEL)?.let { logLevel(it) } ?: defaults.logLevel,
+            defaultChannelName = text(meta, META_CHANNEL_NAME) ?: defaults.defaultChannelName,
+            defaultChannelId = text(meta, META_CHANNEL_ID) ?: defaults.defaultChannelId,
         )
         try {
             HeroSignalBridge.initialize(ctx, appId, options)
@@ -36,6 +37,17 @@ class HeroSignalInitProvider : ContentProvider() {
             HsLog.e("HeroSignal erken başlatma başarısız", e)
         }
         return true
+    }
+
+    // Manifest meta-data değerleri tipli ayrıştırılır ("123" → Int, "true" → Boolean); hepsi metin olarak okunur.
+    @Suppress("DEPRECATION")
+    private fun text(meta: Bundle, key: String): String? = meta.get(key)?.toString()?.takeIf { it.isNotBlank() }
+
+    @Suppress("DEPRECATION")
+    private fun flag(meta: Bundle, key: String): Boolean? = when (val value = meta.get(key)) {
+        is Boolean -> value
+        is String -> value.trim().equals("true", ignoreCase = true)
+        else -> null
     }
 
     @Suppress("DEPRECATION")
@@ -57,5 +69,7 @@ class HeroSignalInitProvider : ContentProvider() {
         const val META_API_URL = "com.herosignal.reactnative.api_url"
         const val META_REQUIRES_CONSENT = "com.herosignal.reactnative.requires_privacy_consent"
         const val META_LOG_LEVEL = "com.herosignal.reactnative.log_level"
+        const val META_CHANNEL_ID = "com.herosignal.reactnative.default_channel_id"
+        const val META_CHANNEL_NAME = "com.herosignal.reactnative.default_channel_name"
     }
 }

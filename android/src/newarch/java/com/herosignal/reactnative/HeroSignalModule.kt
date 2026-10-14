@@ -72,6 +72,14 @@ class HeroSignalModule(reactContext: ReactApplicationContext) : NativeHeroSignal
         impl.removeSms(phoneNumber, promise)
     }
 
+    override fun getEmails(promise: Promise) {
+        impl.getEmails(promise)
+    }
+
+    override fun getSmsNumbers(promise: Promise) {
+        impl.getSmsNumbers(promise)
+    }
+
     override fun getExternalId(promise: Promise) {
         impl.getExternalId(promise)
     }
@@ -110,6 +118,14 @@ class HeroSignalModule(reactContext: ReactApplicationContext) : NativeHeroSignal
 
     override fun clearAll() {
         impl.clearAll()
+    }
+
+    override fun removeNotification(id: String, promise: Promise) {
+        impl.removeNotification(id, promise)
+    }
+
+    override fun removeGroupedNotifications(group: String, promise: Promise) {
+        impl.removeGroupedNotifications(group, promise)
     }
 
     override fun setForegroundHandlerEnabled(enabled: Boolean) {

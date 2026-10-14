@@ -4,6 +4,7 @@ import {
   toInboxItem,
   toInboxPage,
   toNotification,
+  toStringArray,
   toStringMap,
   toSubscriptionState,
   toUserPreferences,
@@ -90,6 +91,7 @@ export class DisplayableNotification implements NotificationData {
   readonly deliveryId: string | null;
   readonly messageId: string | null;
   readonly data: Record<string, string>;
+  readonly androidNotificationId: number | null;
 
   constructor(
     /** Köprü içi olay kimliği (ön plan kararını yerel olayla eşler). */
@@ -103,6 +105,7 @@ export class DisplayableNotification implements NotificationData {
     this.deliveryId = data.deliveryId;
     this.messageId = data.messageId;
     this.data = data.data;
+    this.androidNotificationId = data.androidNotificationId;
   }
 
   /** Bildirimi gösterir; `preventDefault()` sonrası en geç 25 sn içinde çağrılmalıdır. */
@@ -324,6 +327,14 @@ const User = {
   getHeroSignalId(): Promise<string | null> {
     return nativeModule().getUserId();
   },
+  /** Bu cihazda `addEmail` ile kaydedilmiş e-posta adresleri (yerel kayıt; sunucu sorgulanmaz). */
+  async getEmails(): Promise<string[]> {
+    return toStringArray(await nativeModule().getEmails());
+  },
+  /** Bu cihazda `addSms` ile kaydedilmiş SMS numaraları (E.164; yerel kayıt). */
+  async getSmsNumbers(): Promise<string[]> {
+    return toStringArray(await nativeModule().getSmsNumbers());
+  },
   /**
    * Kullanıcının kategori/kanal tercihleri ve app'in mesaj kategorileri (ADR-0019 §4); sahiplik kanıtı yerel SDK'da
    * eklenir. Abonelik henüz kaydedilmediyse `NOT_READY` koduyla reddedilir.
@@ -359,6 +370,21 @@ const Notifications = {
   /** Bildirim merkezindeki HeroSignal bildirimlerini kaldırır (iOS'ta rozet de sıfırlanır). */
   clearAll(): void {
     nativeModule().clearAll();
+  },
+  /**
+   * Tek bildirimi kaldırır. Android: `notification.androidNotificationId` (tamsayı); iOS: bildirim isteği kimliği
+   * (`UNNotificationRequest.identifier`, metin). Android'de tamsayıya çevrilemeyen kimlik `INVALID_ARGUMENT` ile reddedilir.
+   */
+  removeNotification(id: number | string): Promise<void> {
+    if (typeof id === 'number') {
+      if (!Number.isInteger(id)) throw new TypeError('HeroSignal: androidNotificationId tamsayı olmalı.');
+      return nativeModule().removeNotification(String(id));
+    }
+    return nativeModule().removeNotification(requireNonEmpty(id, 'id'));
+  },
+  /** Aynı gruptaki bildirimleri kaldırır (Android `android_group`, iOS `thread-id`). */
+  removeGroupedNotifications(group: string): Promise<void> {
+    return nativeModule().removeGroupedNotifications(requireNonEmpty(group, 'group'));
   },
   addEventListener<K extends keyof NotificationEventMap>(event: K, listener: (e: NotificationEventMap[K]) => void): void {
     const hub = notificationHubs[event] as unknown as EventHub<unknown, NotificationEventMap[K]> | undefined;

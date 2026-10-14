@@ -33,6 +33,10 @@ export interface Spec extends TurboModule {
   removeSms(phoneNumber: string): Promise<void>;
   getExternalId(): Promise<string | null>;
   getUserId(): Promise<string | null>;
+  /** Bu cihazda kaydedilmiş e-posta adresleri (yerel kayıt). */
+  getEmails(): Promise<Array<string>>;
+  /** Bu cihazda kaydedilmiş SMS numaraları (E.164, yerel kayıt). */
+  getSmsNumbers(): Promise<Array<string>>;
   /** Sonuç: { preferences: [{ category, channel, optedIn, explicit, source, updatedAt }], categories: [{ key, name, description, channels, defaultOptedIn }] } */
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
   getPreferences(): Promise<Object>;
@@ -50,6 +54,10 @@ export interface Spec extends TurboModule {
   getPermission(): Promise<boolean>;
   requestPermission(): Promise<boolean>;
   clearAll(): void;
+  /** Android: `androidNotificationId` (metin olarak tamsayı); iOS: `UNNotificationRequest.identifier`. */
+  removeNotification(id: string): Promise<void>;
+  /** Android `android_group`, iOS `thread-id` grubundaki bildirimleri kaldırır. */
+  removeGroupedNotifications(group: string): Promise<void>;
   setForegroundHandlerEnabled(enabled: boolean): void;
   /** Ön plan olayı için bildirimi gösterir (bir kez). */
   displayNotification(notificationId: string): void;

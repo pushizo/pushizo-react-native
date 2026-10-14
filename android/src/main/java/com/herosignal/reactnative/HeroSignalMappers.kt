@@ -23,6 +23,7 @@ internal fun HsNotification.toMap(): Map<String, Any?> = mapOf(
     "deliveryId" to deliveryId,
     "messageId" to messageId,
     "data" to data,
+    "androidNotificationId" to androidNotificationId,
 )
 
 internal fun HsPushSubscriptionState.toMap(): Map<String, Any?> =

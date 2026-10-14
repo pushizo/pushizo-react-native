@@ -185,6 +185,16 @@ RCT_EXPORT_METHOD(getUserId:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRe
   resolve([[HeroSignalRNBridge shared] userId]);
 }
 
+RCT_EXPORT_METHOD(getEmails:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve([[HeroSignalRNBridge shared] emails]);
+}
+
+RCT_EXPORT_METHOD(getSmsNumbers:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve([[HeroSignalRNBridge shared] smsNumbers]);
+}
+
 #pragma mark - Tercihler
 
 RCT_EXPORT_METHOD(getPreferences:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
@@ -231,6 +241,20 @@ RCT_EXPORT_METHOD(requestPermission:(RCTPromiseResolveBlock)resolve reject:(RCTP
 RCT_EXPORT_METHOD(clearAll)
 {
   [[HeroSignalRNBridge shared] clearAll];
+}
+
+RCT_EXPORT_METHOD(removeNotification:(NSString *)identifier
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[HeroSignalRNBridge shared] removeNotification:identifier resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(removeGroupedNotifications:(NSString *)group
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[HeroSignalRNBridge shared] removeGroupedNotifications:group resolve:resolve reject:reject];
 }
 
 RCT_EXPORT_METHOD(setForegroundHandlerEnabled:(BOOL)enabled)

@@ -46,6 +46,8 @@ function createNative(): Record<string, jest.Mock> {
     removeSms: resolved(),
     getExternalId: resolved('user_42'),
     getUserId: resolved('hs_1'),
+    getEmails: resolved(['ali@example.com', 5]),
+    getSmsNumbers: resolved(['+905321234567']),
     getPreferences: resolved(PREFERENCES_RAW),
     setPreferences: resolved(PREFERENCES_RAW),
     getPushSubscriptionState: resolved({ id: 'sub_1', token: 'tok', optedIn: true, permission: true }),
@@ -54,6 +56,8 @@ function createNative(): Record<string, jest.Mock> {
     getPermission: resolved(true),
     requestPermission: resolved(false),
     clearAll: jest.fn(),
+    removeNotification: resolved(),
+    removeGroupedNotifications: resolved(),
     setForegroundHandlerEnabled: jest.fn(),
     displayNotification: jest.fn(),
     preventDefault: jest.fn(),
@@ -178,6 +182,16 @@ describe('HeroSignal (React Native)', () => {
     await expect(HeroSignal.User.getTags()).resolves.toEqual({ plan: 'pro', level: '3' });
     await expect(HeroSignal.User.getExternalId()).resolves.toBe('user_42');
     await expect(HeroSignal.User.getHeroSignalId()).resolves.toBe('hs_1');
+    await expect(HeroSignal.User.getEmails()).resolves.toEqual(['ali@example.com']);
+    await expect(HeroSignal.User.getSmsNumbers()).resolves.toEqual(['+905321234567']);
+  });
+
+  test('User: e-posta/SMS listesi yerelden dizi dışı gelirse boş liste döner', async () => {
+    const { HeroSignal, env } = load();
+    env.native.getEmails.mockResolvedValueOnce(null);
+    env.native.getSmsNumbers.mockResolvedValueOnce(undefined);
+    await expect(HeroSignal.User.getEmails()).resolves.toEqual([]);
+    await expect(HeroSignal.User.getSmsNumbers()).resolves.toEqual([]);
   });
 
   test('User: hatalı argümanlar yerel modüle gitmeden reddedilir', () => {
@@ -298,18 +312,42 @@ describe('HeroSignal (React Native)', () => {
     expect(env.native.clearAll).toHaveBeenCalled();
   });
 
+  test('Notifications: tekil ve gruplu bildirim kaldırma yerel modüle iletilir', async () => {
+    const { HeroSignal, env } = load();
+    await HeroSignal.Notifications.removeNotification(42);
+    await HeroSignal.Notifications.removeNotification('ios-request-1');
+    await HeroSignal.Notifications.removeGroupedNotifications('orders');
+    expect(env.native.removeNotification).toHaveBeenNthCalledWith(1, '42');
+    expect(env.native.removeNotification).toHaveBeenNthCalledWith(2, 'ios-request-1');
+    expect(env.native.removeGroupedNotifications).toHaveBeenCalledWith('orders');
+    expect(() => HeroSignal.Notifications.removeNotification(1.5)).toThrow('tamsayı');
+    expect(() => HeroSignal.Notifications.removeNotification(' ')).toThrow(TypeError);
+    expect(() => HeroSignal.Notifications.removeGroupedNotifications('')).toThrow(TypeError);
+    expect(env.native.removeNotification).toHaveBeenCalledTimes(2);
+    expect(env.native.removeGroupedNotifications).toHaveBeenCalledTimes(1);
+  });
+
   test('Notifications: tıklama olayı plan 06 biçiminde iletilir; son dinleyici çıkınca abonelik kapanır', () => {
     const { HeroSignal, env } = load();
     const listener = jest.fn();
     HeroSignal.Notifications.addEventListener('click', listener);
     expect(env.native.addListener).toHaveBeenCalledWith('HeroSignal-notificationClick');
     env.emit('HeroSignal-notificationClick', {
-      notification: { title: 'Kargo', body: 'Yolda', url: null, deliveryId: 'd1', messageId: 'm1', data: { order: '7' } },
+      notification: { title: 'Kargo', body: 'Yolda', url: null, deliveryId: 'd1', messageId: 'm1', data: { order: '7' }, androidNotificationId: 77 },
       actionId: 'track',
       url: 'https://example.com/t/7',
     });
     expect(listener).toHaveBeenCalledWith({
-      notification: { title: 'Kargo', body: 'Yolda', url: null, imageUrl: null, deliveryId: 'd1', messageId: 'm1', data: { order: '7' } },
+      notification: {
+        title: 'Kargo',
+        body: 'Yolda',
+        url: null,
+        imageUrl: null,
+        deliveryId: 'd1',
+        messageId: 'm1',
+        data: { order: '7' },
+        androidNotificationId: 77,
+      },
       result: { actionId: 'track', url: 'https://example.com/t/7' },
     });
     HeroSignal.Notifications.removeEventListener('click', listener);

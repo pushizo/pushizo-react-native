@@ -11,7 +11,8 @@ const pkg = require('../../package.json') as { name: string; version: string };
  *
  * iOS: push yetkisi (aps-environment), arka plan modu (remote-notification), App Group, APNs token iletimi
  * (AppDelegate), Notification Service Extension hedefi ve Podfile. Android: POST_NOTIFICATIONS, varsayılan bildirim
- * ikonu/rengi, erken başlatma meta-data'sı ve google-services.json uyarısı.
+ * ikonu/rengi, erken başlatma meta-data'sı (onay, günlük seviyesi, varsayılan kanal) ve google-services.json kopyalama +
+ * `com.google.gms.google-services` Gradle eklentisi (dosya yoksa uyarı).
  *
  * ```json
  * ["@herosignal/react-native", { "mode": "development", "appId": "app_…", "androidSmallIcon": "./assets/notification-icon.png" }]

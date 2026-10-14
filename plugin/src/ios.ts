@@ -22,6 +22,8 @@ export const PLIST = {
   appId: 'HeroSignalAppId',
   apiUrl: 'HeroSignalApiUrl',
   appGroup: 'HeroSignalAppGroup',
+  requiresConsent: 'HeroSignalRequiresPrivacyConsent',
+  logLevel: 'HeroSignalLogLevel',
 } as const;
 
 type Plist = Record<string, unknown>;
@@ -63,6 +65,11 @@ export function applyInfoPlist<T extends object>(infoPlist: T, props: ResolvedPr
   else delete p[PLIST.appId];
   if (props.apiUrl) p[PLIST.apiUrl] = props.apiUrl;
   else delete p[PLIST.apiUrl];
+  // Erken başlatma (köprü `+load`) bu anahtarları okur: onay bayrağı olmadan SDK onaydan önce ağa çıkabilirdi.
+  if (props.appId) p[PLIST.requiresConsent] = props.requiresPrivacyConsent === true;
+  else delete p[PLIST.requiresConsent];
+  if (props.appId && props.logLevel) p[PLIST.logLevel] = props.logLevel;
+  else delete p[PLIST.logLevel];
   return infoPlist;
 }
 

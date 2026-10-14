@@ -8,6 +8,7 @@ import {
   withDangerousMod,
   withSettingsGradle,
 } from '@expo/config-plugins';
+import type { ExpoConfig } from '@expo/config-types';
 import { generateImageAsync } from '@expo/image-utils';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -25,6 +26,8 @@ export const META = {
   apiUrl: 'com.herosignal.reactnative.api_url',
   requiresConsent: 'com.herosignal.reactnative.requires_privacy_consent',
   logLevel: 'com.herosignal.reactnative.log_level',
+  channelId: 'com.herosignal.reactnative.default_channel_id',
+  channelName: 'com.herosignal.reactnative.default_channel_name',
 } as const;
 
 /** Android bildirim küçük ikonu boyutları (dp 24 → px). */
@@ -60,8 +63,12 @@ export function applyAndroidManifest(manifest: AndroidManifest, props: ResolvedP
     set(META.requiresConsent, String(props.requiresPrivacyConsent === true));
     if (props.logLevel) set(META.logLevel, props.logLevel);
     else unset(META.logLevel);
+    if (props.androidDefaultChannelId) set(META.channelId, props.androidDefaultChannelId);
+    else unset(META.channelId);
+    if (props.androidDefaultChannelName) set(META.channelName, props.androidDefaultChannelName);
+    else unset(META.channelName);
   } else {
-    [META.appId, META.apiUrl, META.requiresConsent, META.logLevel].forEach(unset);
+    [META.appId, META.apiUrl, META.requiresConsent, META.logLevel, META.channelId, META.channelName].forEach(unset);
   }
   return manifest;
 }
@@ -100,12 +107,40 @@ export async function writeNotificationIcons(projectRoot: string, platformProjec
   }
 }
 
+/**
+ * `android.googleServicesFile` dosyasını `android/app/google-services.json` olarak kopyalar. Kaynak yoksa hangi alanın
+ * düzeltileceğini söyleyen açık hata verilir (Expo'nun genel kopyalama hatası yerine).
+ */
+export async function copyGoogleServicesFile(config: Pick<ExpoConfig, 'android'>, projectRoot: string): Promise<string> {
+  const file = config.android?.googleServicesFile;
+  if (!file) throw new Error(`${PLUGIN_NAME} config plugin: "android.googleServicesFile" tanımlı değil.`);
+  const source = path.resolve(projectRoot, file);
+  if (!fs.existsSync(source)) {
+    throw new Error(`${PLUGIN_NAME} config plugin: app.json → "android.googleServicesFile" dosyası bulunamadı: ${source}`);
+  }
+  await AndroidConfig.GoogleServices.setGoogleServicesFile(config, projectRoot);
+  return path.join(projectRoot, 'android', 'app', 'google-services.json');
+}
+
 export const withHeroSignalAndroid: ConfigPlugin<ResolvedProps> = (config, props) => {
   if (!config.android?.googleServicesFile) {
     WarningAggregator.addWarningAndroid(
       PLUGIN_NAME,
       'FCM için google-services.json gerekli: Firebase konsolundan indirip app.json → "android.googleServicesFile" alanına yolunu yazın (ör. "./google-services.json"). Ardından FCM v1 servis hesabı JSON dosyasını HeroSignal panelinde Android kimlik bilgisi olarak yükleyin.',
     );
+  } else {
+    // Expo prebuild aynı adımları varsayılan eklentilerinde de uygular; buradaki çağrılar idempotenttir (sınıf yolu ve
+    // `apply plugin` zaten varsa eklenmez). Böylece varsayılan eklentiler olmadan çalışan prebuild akışlarında da
+    // (ör. yalnız config plugin zinciri) FCM yapılandırması eksik kalmaz.
+    config = AndroidConfig.GoogleServices.withClassPath(config);
+    config = AndroidConfig.GoogleServices.withApplyPlugin(config);
+    config = withDangerousMod(config, [
+      'android',
+      async (c) => {
+        await copyGoogleServicesFile(c, c.modRequest.projectRoot);
+        return c;
+      },
+    ]);
   }
 
   config = withAndroidManifest(config, (c) => {

@@ -14,6 +14,11 @@ export type RawMap = Record<string, unknown> | null | undefined;
 const str = (value: unknown): string | null => (typeof value === 'string' ? value : null);
 const num = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 
+/** Yalnızca metin öğeleri tutulan liste (e-posta/SMS listeleri); dizi olmayan değer boş listeye düşer. */
+export function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+}
+
 /** Değerleri string olan sözlük (tag, trigger, `data`); sayı/mantıksal metne, nesne JSON'a çevrilir; null atlanır. */
 export function toStringMap(value: unknown): Record<string, string> {
   const out: Record<string, string> = {};
@@ -36,6 +41,7 @@ export function toNotification(raw: RawMap): NotificationData {
     deliveryId: str(m.deliveryId),
     messageId: str(m.messageId),
     data: toStringMap(m.data),
+    androidNotificationId: num(m.androidNotificationId),
   };
 }
 
