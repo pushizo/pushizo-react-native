@@ -22,5 +22,11 @@ export {
   type InboxItem,
   type InboxPage,
   type InboxListOptions,
+  PreferenceChannels,
+  type PreferenceChannel,
+  type PreferenceCategory,
+  type PreferenceInput,
+  type UserPreference,
+  type UserPreferences,
 } from './types';
 export { HeroSignal as default } from './HeroSignal';

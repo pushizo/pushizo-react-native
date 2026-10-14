@@ -7,7 +7,11 @@ import com.herosignal.sdk.HeroSignal
 import com.herosignal.sdk.HsInboxItem
 import com.herosignal.sdk.HsInboxPage
 import com.herosignal.sdk.HsLog
+import com.herosignal.sdk.HsMessageCategory
 import com.herosignal.sdk.HsNotification
+import com.herosignal.sdk.HsPreference
+import com.herosignal.sdk.HsPreferenceInput
+import com.herosignal.sdk.HsPreferencesResult
 import com.herosignal.sdk.HsPushSubscriptionState
 
 /** Yerel SDK modellerinin JS'e gidecek haritaları (alan adları TS `types.ts` ile aynıdır). */
@@ -41,6 +45,41 @@ internal fun HsInboxItem.toMap(): Map<String, Any?> = mapOf(
 
 internal fun HsInboxPage.toMap(): Map<String, Any?> =
     mapOf("items" to items.map { it.toMap() }, "unreadCount" to unreadCount, "nextCursor" to nextCursor, "hasMore" to hasMore)
+
+internal fun HsPreference.toMap(): Map<String, Any?> = mapOf(
+    "category" to category,
+    "channel" to channel,
+    "optedIn" to optedIn,
+    "explicit" to explicit,
+    "source" to source,
+    "updatedAt" to updatedAt,
+)
+
+internal fun HsMessageCategory.toMap(): Map<String, Any?> = mapOf(
+    "key" to key,
+    "name" to name,
+    "description" to description,
+    "channels" to channels,
+    "defaultOptedIn" to defaultOptedIn,
+)
+
+internal fun HsPreferencesResult.toMap(): Map<String, Any?> =
+    mapOf("preferences" to preferences.map { it.toMap() }, "categories" to categories.map { it.toMap() })
+
+/**
+ * JS `setPreferences` girdisi → yerel [HsPreferenceInput] listesi. Kurallar (1-100 kayıt, kategori 1-64, bilinen kanal)
+ * yerel SDK'da doğrulanır; tipi bozuk alan boş/varsayılan değere düşer ve orada `INVALID_ARGUMENT` ile reddedilir.
+ */
+internal fun ReadableArray.toPreferenceInputs(): List<HsPreferenceInput> = (0 until size()).mapNotNull { index ->
+    if (getType(index) != ReadableType.Map) return@mapNotNull null
+    val map = getMap(index) ?: return@mapNotNull null
+    fun type(key: String): ReadableType? = if (map.hasKey(key)) map.getType(key) else null
+    HsPreferenceInput(
+        category = if (type("category") == ReadableType.String) map.getString("category").orEmpty() else "",
+        channel = if (type("channel") == ReadableType.String) map.getString("channel") else null,
+        optedIn = type("optedIn") == ReadableType.Boolean && map.getBoolean("optedIn"),
+    )
+}
 
 /** Yalnızca metin değerleri alır (tag, alias, trigger); diğer tipler TS katmanında zaten reddedilir. */
 internal fun ReadableMap.toStringMap(): Map<String, String> {

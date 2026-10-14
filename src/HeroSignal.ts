@@ -1,5 +1,13 @@
 import { EventHub } from './events';
-import { type RawMap, toInboxItem, toInboxPage, toNotification, toStringMap, toSubscriptionState } from './mappers';
+import {
+  type RawMap,
+  toInboxItem,
+  toInboxPage,
+  toNotification,
+  toStringMap,
+  toSubscriptionState,
+  toUserPreferences,
+} from './mappers';
 import { nativeModule } from './native';
 import {
   type InAppMessageClickEvent,
@@ -13,7 +21,11 @@ import {
   type NotificationData,
   NativeEvents,
   type PermissionChangeEvent,
+  type PreferenceChannel,
+  PreferenceChannels,
+  type PreferenceInput,
   type PushSubscriptionChangedState,
+  type UserPreferences,
 } from './types';
 
 const LOG_LEVELS: readonly string[] = Object.values(LogLevel);
@@ -40,6 +52,29 @@ function requireStringArray(value: unknown, name: string): string[] {
     throw new TypeError(`HeroSignal: ${name} metin dizisi olmalı.`);
   }
   return value as string[];
+}
+
+const MAX_PREFERENCES = 100;
+const MAX_CATEGORY_LENGTH = 64;
+
+/** Yerel SDK doğrulamasıyla aynı kurallar: 1-100 kayıt, kategori 1-64 karakter, kanal bilinen anahtar veya `null`. */
+function requirePreferenceInputs(value: unknown): Array<{ category: string; channel: PreferenceChannel | null; optedIn: boolean }> {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_PREFERENCES) {
+    throw new TypeError(`HeroSignal: preferences 1-${MAX_PREFERENCES} kayıtlı bir dizi olmalı.`);
+  }
+  return value.map((item: unknown, index) => {
+    const name = `preferences[${index}]`;
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new TypeError(`HeroSignal: ${name} bir nesne olmalı.`);
+    const { category, channel, optedIn } = item as Record<string, unknown>;
+    if (typeof category !== 'string' || category.trim() === '' || category.length > MAX_CATEGORY_LENGTH) {
+      throw new TypeError(`HeroSignal: ${name}.category 1-${MAX_CATEGORY_LENGTH} karakterlik bir metin olmalı.`);
+    }
+    if (channel !== undefined && channel !== null && !(PreferenceChannels as readonly unknown[]).includes(channel)) {
+      throw new TypeError(`HeroSignal: ${name}.channel geçersiz; ${PreferenceChannels.join(', ')} veya null olmalı.`);
+    }
+    if (typeof optedIn !== 'boolean') throw new TypeError(`HeroSignal: ${name}.optedIn mantıksal değer olmalı.`);
+    return { category, channel: (channel ?? null) as PreferenceChannel | null, optedIn };
+  });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -288,6 +323,20 @@ const User = {
   /** HeroSignal kullanıcı kimliği (`hs_id`). */
   getHeroSignalId(): Promise<string | null> {
     return nativeModule().getUserId();
+  },
+  /**
+   * Kullanıcının kategori/kanal tercihleri ve app'in mesaj kategorileri (ADR-0019 §4); sahiplik kanıtı yerel SDK'da
+   * eklenir. Abonelik henüz kaydedilmediyse `NOT_READY` koduyla reddedilir.
+   */
+  async getPreferences(): Promise<UserPreferences> {
+    return toUserPreferences((await nativeModule().getPreferences()) as RawMap);
+  },
+  /** Tercihleri yazar (1-100 kayıt; `channel` verilmezse tüm kanallar); güncel tercihleri döndürür. */
+  setPreferences(preferences: PreferenceInput[]): Promise<UserPreferences> {
+    const inputs = requirePreferenceInputs(preferences);
+    return nativeModule()
+      .setPreferences(inputs)
+      .then((raw) => toUserPreferences(raw as RawMap));
   },
 };
 

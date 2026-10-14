@@ -238,6 +238,21 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
     @objc public func externalId() -> String? { HeroSignal.User.externalId }
     @objc public func userId() -> String? { HeroSignal.User.id }
 
+    // MARK: - Tercihler (ADR-0019 §4; abonelik yoksa NOT_READY, geçersiz girdi INVALID_ARGUMENT)
+
+    @objc public func getPreferences(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        inbox(resolve, reject) { try await Self.map(HeroSignal.User.getPreferences()) }
+    }
+
+    /// Kurallar (1-100 kayıt, kategori 1-64, bilinen kanal) yerel SDK'da doğrulanır; tipi bozuk alan boş/varsayılan
+    /// değere düşer ve orada `INVALID_ARGUMENT` ile reddedilir.
+    @objc public func setPreferences(_ preferences: [Any], resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        let inputs = preferences.compactMap { $0 as? [String: Any] }.map {
+            HSPreferenceInput(category: $0["category"] as? String ?? "", channel: $0["channel"] as? String, optedIn: $0["optedIn"] as? Bool ?? false)
+        }
+        inbox(resolve, reject) { try await Self.map(HeroSignal.User.setPreferences(inputs)) }
+    }
+
     // MARK: - Push aboneliği
 
     @objc public func getPushSubscriptionState(_ resolve: @escaping (Any?) -> Void) {
@@ -342,7 +357,8 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
         inbox(resolve, reject) { try await HeroSignal.Inbox.unreadCount() }
     }
 
-    /// Hata kodları: sunucu `HSApiError.code`, kullanım hataları `NOT_READY` / `INVALID_ARGUMENT`.
+    /// Asenkron yerel çağrı (bildirim kutusu, tercihler). Hata kodları: sunucu `HSApiError.code`, kullanım hataları
+    /// `NOT_READY` / `INVALID_ARGUMENT`.
     private func inbox(_ resolve: @escaping (Any?) -> Void, _ reject: @escaping (String, String, Error?) -> Void, _ body: @escaping () async throws -> Any?) {
         Task {
             do {
@@ -416,5 +432,18 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
 
     private static func map(_ page: HSInboxPage) -> [String: Any] {
         ["items": page.items.map { map($0) }, "unreadCount": page.unreadCount, "nextCursor": page.nextCursor ?? NSNull(), "hasMore": page.hasMore]
+    }
+
+    private static func map(_ p: HSPreference) -> [String: Any] {
+        ["category": p.category, "channel": p.channel ?? NSNull(), "optedIn": p.optedIn, "explicit": p.explicit,
+         "source": p.source ?? NSNull(), "updatedAt": millis(p.updatedAt)]
+    }
+
+    private static func map(_ c: HSMessageCategory) -> [String: Any] {
+        ["key": c.key, "name": c.name, "description": c.description, "channels": c.channels ?? NSNull(), "defaultOptedIn": c.defaultOptedIn]
+    }
+
+    private static func map(_ r: HSPreferencesResult) -> [String: Any] {
+        ["preferences": r.preferences.map { map($0) }, "categories": r.categories.map { map($0) }]
     }
 }

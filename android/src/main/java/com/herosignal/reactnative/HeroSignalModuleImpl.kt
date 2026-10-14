@@ -110,6 +110,14 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
 
     fun getUserId(promise: Promise) = promise.resolve(HeroSignal.User.id)
 
+    // --- Tercihler (ADR-0019 §4; abonelik yoksa NOT_READY, geçersiz girdi INVALID_ARGUMENT) ---
+
+    fun getPreferences(promise: Promise) =
+        HeroSignal.User.getPreferences(reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+
+    fun setPreferences(preferences: ReadableArray, promise: Promise) =
+        HeroSignal.User.setPreferences(preferences.toPreferenceInputs(), reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+
     // --- Push aboneliği ---
 
     fun getPushSubscriptionState(promise: Promise) =

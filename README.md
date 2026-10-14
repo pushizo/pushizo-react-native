@@ -1,7 +1,8 @@
 # @herosignal/react-native
 
 HeroSignal React Native SDK'sı: Android (`com.herosignal.sdk`) ve iOS (`HeroSignal`) yerel SDK'larını saran köprü ve
-Expo config plugin. Push aboneliği, kullanıcı/tag/alias, e-posta/SMS, in-app mesajlar, bildirim kutusu ve olaylar.
+Expo config plugin. Push aboneliği, kullanıcı/tag/alias, e-posta/SMS, bildirim tercihleri, in-app mesajlar, bildirim
+kutusu ve olaylar.
 Yüzey plan 06 §6.1 ile ve eski sağlayıcı v5 React Native API'si ile uyumludur; kuyruk, oturum, teslimat geri bildirimi
 (received/opened) ve in-app çizimi yerel SDK'dadır.
 
@@ -125,6 +126,13 @@ await HeroSignal.User.addEmail('ali@example.com');      // geçersizse INVALID_A
 await HeroSignal.User.addSms('+90 532 123 45 67');      // E.164'e normalize edilir
 await HeroSignal.User.setLanguage('tr');
 
+// Bildirim tercihleri (kategori × kanal; abonelik kaydı gerekir, yoksa NOT_READY)
+const { preferences, categories } = await HeroSignal.User.getPreferences();
+await HeroSignal.User.setPreferences([
+  { category: 'promo', optedIn: false },                   // channel yok/null = tüm kanallar
+  { category: 'news', channel: 'email', optedIn: true },  // ios_push | android_push | web_push | email | sms
+]);
+
 HeroSignal.Notifications.addEventListener('click', (e) => {
   console.log(e.notification.title, e.result.actionId, e.result.url);
 });
@@ -171,7 +179,7 @@ SDK'yı yeniden kurmaz.
 
 ### Hata kodları
 
-Promise reddi `code` alanı: `INVALID_ARGUMENT` (geçersiz e-posta/telefon/alias/trigger), `NOT_READY`
+Promise reddi `code` alanı: `INVALID_ARGUMENT` (geçersiz e-posta/telefon/alias/trigger/tercih), `NOT_READY`
 (`initialize` çağrılmadı veya abonelik henüz kayıtlı değil), `NO_ACTIVITY` (Android'de izin isteği için ön planda
 Activity yok), sunucu hata kodları (`HSApiError.code` / `HsApiException.code`) ve `HS_ERROR`.
 
