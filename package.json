@@ -4,10 +4,10 @@
   "description": "HeroSignal React Native SDK: push aboneliği, kullanıcı/tag, e-posta/SMS, in-app mesajlar, bildirim kutusu ve Expo config plugin (Android + iOS).",
   "license": "MIT",
   "author": "HeroSignal <sdk@herosignal.dev>",
-  "homepage": "https://github.com/herosignal/herosignal/tree/main/sdk/react-native#readme",
+  "homepage": "https://github.com/exec0de/herosignal/tree/main/sdk/react-native#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/herosignal/herosignal.git",
+    "url": "https://github.com/exec0de/herosignal.git",
     "directory": "sdk/react-native"
   },
   "main": "lib/index.js",
