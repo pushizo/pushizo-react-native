@@ -17,7 +17,9 @@ import {
   type InboxListOptions,
   type InboxPage,
   type InitializeOptions,
+  type LiveActivityValue,
   LogLevel,
+  type LoginOptions,
   type NotificationClickEvent,
   type NotificationData,
   NativeEvents,
@@ -76,6 +78,39 @@ function requirePreferenceInputs(value: unknown): Array<{ category: string; chan
     if (typeof optedIn !== 'boolean') throw new TypeError(`HeroSignal: ${name}.optedIn mantıksal değer olmalı.`);
     return { category, channel: (channel ?? null) as PreferenceChannel | null, optedIn };
   });
+}
+
+/** Live Activity etkinlik kimliği: iOS SDK ve sunucu `start` kuralı (1-100 karakter; harf, rakam ve `_ . : -`). */
+const LIVE_ACTIVITY_ID = /^[A-Za-z0-9_.:-]{1,100}$/;
+const MAX_LIVE_ACTIVITY_KEY_LENGTH = 64;
+/** Sunucunun uzaktan başlatmada `attributes` içine eklediği ayrılmış anahtar. */
+const RESERVED_LIVE_ACTIVITY_KEY = 'herosignal';
+
+function requireLiveActivityId(value: unknown): string {
+  if (typeof value !== 'string' || !LIVE_ACTIVITY_ID.test(value)) {
+    throw new TypeError('HeroSignal: activityId 1-100 karakter olmalı (harf, rakam ve _ . : -).');
+  }
+  return value;
+}
+
+/** Düz nesne; anahtar 1-64 karakter, değer metin / sonlu sayı / mantıksal (yerel SDK ile aynı kurallar). */
+function requireLiveActivityValues(value: unknown, name: string, reservedKey?: string): Record<string, LiveActivityValue> {
+  const proto: unknown = value !== null && typeof value === 'object' ? Object.getPrototypeOf(value) : undefined;
+  if (Array.isArray(value) || (proto !== Object.prototype && proto !== null)) {
+    throw new TypeError(`HeroSignal: ${name} düz bir nesne olmalı.`);
+  }
+  const out: Record<string, LiveActivityValue> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (key.length < 1 || key.length > MAX_LIVE_ACTIVITY_KEY_LENGTH) {
+      throw new TypeError(`HeroSignal: ${name} anahtarları 1-${MAX_LIVE_ACTIVITY_KEY_LENGTH} karakter olmalı.`);
+    }
+    if (key === reservedKey) throw new TypeError(`HeroSignal: ${name} içinde '${reservedKey}' anahtarı ayrılmıştır.`);
+    if (typeof item !== 'string' && typeof item !== 'boolean' && !(typeof item === 'number' && Number.isFinite(item))) {
+      throw new TypeError(`HeroSignal: ${name}.${key} metin, sonlu sayı veya mantıksal değer olmalı.`);
+    }
+    out[key] = item;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -488,6 +523,36 @@ const Session = {
   },
 };
 
+/**
+ * iOS Live Activities (ADR-0024; iOS 16.1+). Köprü, genel `HeroSignalDefaultLiveActivityAttributes` türünü kullanır;
+ * widget extension'da bu türle `ActivityConfiguration` tanımlanmalı ve sunucuda tür adı aynen kaydedilmelidir.
+ * Android'de çağrılar `PLATFORM_NOT_SUPPORTED` koduyla reddedilir.
+ */
+const LiveActivities = {
+  /**
+   * Genel türü izlemeye alır: push-to-start belirteci (iOS 17.2+) ve başlayan her etkinliğin güncelleme belirteci
+   * sunucuya kaydedilir. `initialize`'dan sonra, uygulama her açıldığında çağrılmalıdır.
+   */
+  setupDefaultLiveActivity(): Promise<void> {
+    return nativeModule().setupDefaultLiveActivity();
+  },
+  /**
+   * Genel türle yerel bir etkinlik başlatır (iOS 16.1+); sunucu sonraki `update`/`end` çağrılarını `activityId` ile
+   * yapar. `attributes` içinde `herosignal` anahtarı ayrılmıştır.
+   */
+  startDefaultLiveActivity(
+    activityId: string,
+    attributes: Record<string, LiveActivityValue>,
+    contentState: Record<string, LiveActivityValue>,
+  ): Promise<void> {
+    return nativeModule().startDefaultLiveActivity(
+      requireLiveActivityId(activityId),
+      requireLiveActivityValues(attributes, 'attributes', RESERVED_LIVE_ACTIVITY_KEY),
+      requireLiveActivityValues(contentState, 'contentState'),
+    );
+  },
+};
+
 const Debug = {
   setLogLevel(level: LogLevel): void {
     if (!LOG_LEVELS.includes(level)) throw new TypeError(`HeroSignal: geçersiz günlük seviyesi '${String(level)}'.`);
@@ -525,11 +590,24 @@ export const HeroSignal = {
     lastPermission = (await nativeModule().getPermission()) === true;
   },
 
-  /** Anonim kullanıcıyı kimlikli kullanıcıya bağlar; identity verification açıksa `identityHash` zorunludur. */
-  login(externalId: string, identityHash?: string): Promise<void> {
-    return nativeModule().login(requireNonEmpty(externalId, 'externalId'), identityHash ?? null);
+  /**
+   * Anonim kullanıcıyı kimlikli kullanıcıya bağlar. Identity verification açıksa app moduna göre `identityHash`
+   * (eski imza: ikinci argüman metin) ve/veya JWT gerekir: `login(id, { jwt })`.
+   */
+  login(externalId: string, proof?: string | LoginOptions): Promise<void> {
+    const options: LoginOptions = typeof proof === 'string' ? { identityHash: proof } : (proof ?? {});
+    if (options.jwt !== undefined) requireNonEmpty(options.jwt, 'jwt');
+    return nativeModule().login(
+      requireNonEmpty(externalId, 'externalId'),
+      options.identityHash ?? null,
+      options.jwt ?? null,
+    );
   },
-  /** Kullanıcıyı anonim kullanıcıya döndürür. */
+  /** Süresi dolan kimlik JWT'sini yeniler (giriş yapmış kullanıcı için); sonraki SDK istekleri yeni belirteci taşır. */
+  updateUserJwt(jwt: string): Promise<void> {
+    return nativeModule().updateUserJwt(requireNonEmpty(jwt, 'jwt'));
+  },
+  /** Kullanıcıyı anonim kullanıcıya döndürür; kimlik JWT'si cihazdan silinir. */
   logout(): void {
     nativeModule().logout();
   },
@@ -543,5 +621,6 @@ export const HeroSignal = {
   InAppMessages,
   Inbox,
   Session,
+  LiveActivities,
   Debug,
 };

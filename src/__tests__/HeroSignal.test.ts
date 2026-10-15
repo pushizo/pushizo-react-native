@@ -33,6 +33,7 @@ function createNative(): Record<string, jest.Mock> {
     initialize: resolved(),
     setConsentGiven: jest.fn(),
     login: resolved(),
+    updateUserJwt: resolved(),
     logout: jest.fn(),
     addTags: resolved(),
     removeTags: resolved(),
@@ -81,6 +82,8 @@ function createNative(): Record<string, jest.Mock> {
     inboxMarkAllRead: resolved(0),
     inboxArchive: resolved(),
     inboxUnreadCount: resolved(4),
+    setupDefaultLiveActivity: resolved(),
+    startDefaultLiveActivity: resolved(),
     setLogLevel: jest.fn(),
     addListener: jest.fn(),
     removeListeners: jest.fn(),
@@ -143,7 +146,7 @@ describe('HeroSignal (React Native)', () => {
   test('eski mimari: TurboModule yoksa NativeModules.HeroSignal kullanılır', async () => {
     const { HeroSignal, env } = load({ turbo: false, legacy: true });
     await HeroSignal.login('user_42');
-    expect(env.native.login).toHaveBeenCalledWith('user_42', null);
+    expect(env.native.login).toHaveBeenCalledWith('user_42', null, null);
   });
 
   test('yerel modül bağlı değilse açıklayıcı hata verilir', () => {
@@ -156,9 +159,70 @@ describe('HeroSignal (React Native)', () => {
     await HeroSignal.login('user_42', 'hash');
     HeroSignal.logout();
     HeroSignal.setConsentGiven(true);
-    expect(env.native.login).toHaveBeenCalledWith('user_42', 'hash');
+    expect(env.native.login).toHaveBeenCalledWith('user_42', 'hash', null);
     expect(env.native.logout).toHaveBeenCalled();
     expect(env.native.setConsentGiven).toHaveBeenCalledWith(true);
+  });
+
+  test('JWT identity verification: login seçenekleri ve updateUserJwt', async () => {
+    const { HeroSignal, env } = load();
+    await HeroSignal.login('user_42', { jwt: 'a.b.c' });
+    expect(env.native.login).toHaveBeenLastCalledWith('user_42', null, 'a.b.c');
+    await HeroSignal.login('user_42', { identityHash: 'hash', jwt: 'a.b.c' });
+    expect(env.native.login).toHaveBeenLastCalledWith('user_42', 'hash', 'a.b.c');
+    await HeroSignal.login('user_42', {});
+    expect(env.native.login).toHaveBeenLastCalledWith('user_42', null, null);
+    expect(() => HeroSignal.login('user_42', { jwt: ' ' })).toThrow('jwt');
+
+    await HeroSignal.updateUserJwt('d.e.f');
+    expect(env.native.updateUserJwt).toHaveBeenCalledWith('d.e.f');
+    expect(() => HeroSignal.updateUserJwt('')).toThrow('jwt');
+  });
+
+  test('LiveActivities: genel tür kurulumu ve yerel başlatma argümanları yerel modüle iletilir', async () => {
+    const { HeroSignal, env } = load();
+    await HeroSignal.LiveActivities.setupDefaultLiveActivity();
+    expect(env.native.setupDefaultLiveActivity).toHaveBeenCalledTimes(1);
+
+    await HeroSignal.LiveActivities.startDefaultLiveActivity('order_42', { title: 'Sipariş #42' }, { status: 'Yolda', eta: 12, late: false });
+    expect(env.native.startDefaultLiveActivity).toHaveBeenCalledWith(
+      'order_42',
+      { title: 'Sipariş #42' },
+      { status: 'Yolda', eta: 12, late: false },
+    );
+    await HeroSignal.LiveActivities.startDefaultLiveActivity('ns:order.1-a', {}, {});
+    expect(env.native.startDefaultLiveActivity).toHaveBeenLastCalledWith('ns:order.1-a', {}, {});
+  });
+
+  test('LiveActivities: geçersiz kimlik, nesne, anahtar ve değerler yerel modüle gitmeden reddedilir', () => {
+    const { HeroSignal, env } = load();
+    const start = (...args: Parameters<typeof HeroSignal.LiveActivities.startDefaultLiveActivity>) =>
+      HeroSignal.LiveActivities.startDefaultLiveActivity(...args);
+    expect(() => start('', {}, {})).toThrow('activityId');
+    expect(() => start('a'.repeat(101), {}, {})).toThrow('activityId');
+    expect(() => start('sipariş 42', {}, {})).toThrow('activityId');
+    expect(() => start(42 as never, {}, {})).toThrow(TypeError);
+    expect(() => start('order_42', null as never, {})).toThrow('attributes düz bir nesne');
+    expect(() => start('order_42', [] as never, {})).toThrow('attributes düz bir nesne');
+    expect(() => start('order_42', new Date() as never, {})).toThrow('attributes düz bir nesne');
+    expect(() => start('order_42', {}, 'durum' as never)).toThrow('contentState düz bir nesne');
+    expect(() => start('order_42', { herosignal: 'x' }, {})).toThrow("'herosignal' anahtarı ayrılmıştır");
+    expect(() => start('order_42', { ['k'.repeat(65)]: 'x' }, {})).toThrow('1-64');
+    expect(() => start('order_42', { '': 'x' }, {})).toThrow('1-64');
+    expect(() => start('order_42', {}, { eta: Number.NaN })).toThrow('contentState.eta');
+    expect(() => start('order_42', {}, { eta: Infinity })).toThrow('contentState.eta');
+    expect(() => start('order_42', {}, { nested: { a: 1 } } as never)).toThrow('contentState.nested');
+    expect(() => start('order_42', { note: null } as never, {})).toThrow('attributes.note');
+    // contentState içinde `herosignal` ayrılmış değildir.
+    expect(() => start('order_42', {}, { herosignal: 'ok' })).not.toThrow();
+    expect(env.native.startDefaultLiveActivity).toHaveBeenCalledTimes(1);
+  });
+
+  test('LiveActivities: yerel hata kodu (ör. Android PLATFORM_NOT_SUPPORTED) çağırana aynen iletilir', async () => {
+    const { HeroSignal, env } = load();
+    const error = Object.assign(new Error("Live Activities yalnızca iOS'ta desteklenir"), { code: 'PLATFORM_NOT_SUPPORTED' });
+    env.native.setupDefaultLiveActivity.mockReturnValueOnce(Promise.reject(error));
+    await expect(HeroSignal.LiveActivities.setupDefaultLiveActivity()).rejects.toMatchObject({ code: 'PLATFORM_NOT_SUPPORTED' });
   });
 
   test('User: tag, alias, dil, e-posta/SMS ve kimlikler', async () => {

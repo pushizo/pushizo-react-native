@@ -31,8 +31,13 @@ class HeroSignalModule(reactContext: ReactApplicationContext) : ReactContextBase
     }
 
     @ReactMethod
-    fun login(externalId: String, identityHash: String?, promise: Promise) {
-        impl.login(externalId, identityHash, promise)
+    fun login(externalId: String, identityHash: String?, jwt: String?, promise: Promise) {
+        impl.login(externalId, identityHash, jwt, promise)
+    }
+
+    @ReactMethod
+    fun updateUserJwt(jwt: String, promise: Promise) {
+        impl.updateUserJwt(jwt, promise)
     }
 
     @ReactMethod
@@ -239,6 +244,16 @@ class HeroSignalModule(reactContext: ReactApplicationContext) : ReactContextBase
     @ReactMethod
     fun inboxUnreadCount(promise: Promise) {
         impl.inboxUnreadCount(promise)
+    }
+
+    @ReactMethod
+    fun setupDefaultLiveActivity(promise: Promise) {
+        impl.setupDefaultLiveActivity(promise)
+    }
+
+    @ReactMethod
+    fun startDefaultLiveActivity(activityId: String, attributes: ReadableMap, contentState: ReadableMap, promise: Promise) {
+        impl.startDefaultLiveActivity(activityId, attributes, contentState, promise)
     }
 
     @ReactMethod
