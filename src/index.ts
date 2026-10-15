@@ -12,6 +12,8 @@ export {
 export {
   LogLevel,
   type InitializeOptions,
+  type LoginOptions,
+  type LiveActivityValue,
   type NotificationData,
   type NotificationClickEvent,
   type PermissionChangeEvent,

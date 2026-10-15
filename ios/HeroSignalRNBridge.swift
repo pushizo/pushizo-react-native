@@ -191,10 +191,23 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
 
     @objc public func setConsentGiven(_ given: Bool) { HeroSignal.setConsentGiven(given) }
 
-    @objc public func login(_ externalId: String, identityHash: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+    @objc public func login(_ externalId: String, identityHash: String?, jwt: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
         guard HeroSignal.isInitialized else { reject("NOT_READY", "HeroSignal.initialize önce çağrılmalı", nil); return }
-        HeroSignal.login(externalId, identityHash: identityHash)
+        // Kanıt app kipine uymuyorsa Android köprüsündeki gibi reddedilir (yerel SDK yalnızca loglar).
+        if let message = HeroSignal.loginProofError(identityHash: identityHash, jwt: jwt) { reject("NOT_READY", message, nil); return }
+        HeroSignal.login(externalId, identityHash: identityHash, jwt: jwt)
         resolve(nil)
+    }
+
+    @objc public func updateUserJwt(_ jwt: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        do {
+            try HeroSignal.updateUserJwt(jwt)
+            resolve(nil)
+        } catch HSError.invalidArgument(let message) {
+            reject("INVALID_ARGUMENT", message, nil)
+        } catch {
+            reject("NOT_READY", "Önce login ile kullanıcı kimliklendirilmeli", error)
+        }
     }
 
     @objc public func logout() { HeroSignal.logout() }
@@ -409,6 +422,35 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
                 DispatchQueue.main.async { reject(code, "\(error)", error) }
             } catch {
                 DispatchQueue.main.async { reject("HS_ERROR", error.localizedDescription, error) }
+            }
+        }
+    }
+
+    // MARK: - Live Activities (ADR-0024; iOS 16.1+)
+
+    /// Genel `HeroSignalDefaultLiveActivityAttributes` türünü izlemeye alır.
+    @objc public func setupDefaultLiveActivity(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        liveActivity(resolve, reject) { try HeroSignal.LiveActivities.setupDefaultLiveActivity() }
+    }
+
+    /// Genel türle yerel etkinlik başlatır; değer ve anahtar kuralları yerel SDK'da da denetlenir (`INVALID_ARGUMENT`).
+    @objc public func startDefaultLiveActivity(_ activityId: String, attributes: [String: Any], contentState: [String: Any], resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        guard !activityId.trimmingCharacters(in: .whitespaces).isEmpty else { reject("INVALID_ARGUMENT", "activityId gerekli", nil); return }
+        liveActivity(resolve, reject) {
+            try HeroSignal.LiveActivities.startDefaultLiveActivity(activityId: activityId, attributes: attributes, contentState: contentState)
+        }
+    }
+
+    /// ActivityKit çağrısı ana iş parçacığında yapılır; `HSLiveActivityError.code`/`message` köprü hatası olarak aynen iletilir.
+    private func liveActivity(_ resolve: @escaping (Any?) -> Void, _ reject: @escaping (String, String, Error?) -> Void, _ body: @escaping () throws -> Void) {
+        onMain {
+            do {
+                try body()
+                resolve(nil)
+            } catch let error as HSLiveActivityError {
+                reject(error.code, error.message, error)
+            } catch {
+                reject("LIVE_ACTIVITY_FAILED", error.localizedDescription, error)
             }
         }
     }

@@ -24,8 +24,12 @@ class HeroSignalModule(reactContext: ReactApplicationContext) : NativeHeroSignal
         impl.setConsentGiven(given)
     }
 
-    override fun login(externalId: String, identityHash: String?, promise: Promise) {
-        impl.login(externalId, identityHash, promise)
+    override fun login(externalId: String, identityHash: String?, jwt: String?, promise: Promise) {
+        impl.login(externalId, identityHash, jwt, promise)
+    }
+
+    override fun updateUserJwt(jwt: String, promise: Promise) {
+        impl.updateUserJwt(jwt, promise)
     }
 
     override fun logout() {
@@ -190,6 +194,14 @@ class HeroSignalModule(reactContext: ReactApplicationContext) : NativeHeroSignal
 
     override fun inboxUnreadCount(promise: Promise) {
         impl.inboxUnreadCount(promise)
+    }
+
+    override fun setupDefaultLiveActivity(promise: Promise) {
+        impl.setupDefaultLiveActivity(promise)
+    }
+
+    override fun startDefaultLiveActivity(activityId: String, attributes: ReadableMap, contentState: ReadableMap, promise: Promise) {
+        impl.startDefaultLiveActivity(activityId, attributes, contentState, promise)
     }
 
     override fun setLogLevel(level: String) {

@@ -14,7 +14,8 @@ export interface Spec extends TurboModule {
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
   initialize(appId: string, options: Object): Promise<void>;
   setConsentGiven(given: boolean): void;
-  login(externalId: string, identityHash: string | null): Promise<void>;
+  login(externalId: string, identityHash: string | null, jwt: string | null): Promise<void>;
+  updateUserJwt(jwt: string): Promise<void>;
   logout(): void;
 
   // --- Kullanıcı ---
@@ -87,6 +88,13 @@ export interface Spec extends TurboModule {
   inboxMarkAllRead(): Promise<number>;
   inboxArchive(id: string): Promise<void>;
   inboxUnreadCount(): Promise<number>;
+
+  // --- Live Activities (yalnızca iOS 16.1+; Android `PLATFORM_NOT_SUPPORTED` ile reddeder) ---
+  /** Genel `HeroSignalDefaultLiveActivityAttributes` türünü izlemeye alır (push-to-start ve güncelleme belirteçleri). */
+  setupDefaultLiveActivity(): Promise<void>;
+  /** attributes / contentState: düz nesne; değerler metin, sayı veya mantıksal (JS katmanında doğrulanır). */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  startDefaultLiveActivity(activityId: string, attributes: Object, contentState: Object): Promise<void>;
 
   // --- Hata ayıklama ---
   setLogLevel(level: string): void;

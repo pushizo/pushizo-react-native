@@ -50,8 +50,13 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
 
     fun setConsentGiven(given: Boolean) = HeroSignal.setConsentGiven(given)
 
-    fun login(externalId: String, identityHash: String?, promise: Promise) = guard(promise) {
-        HeroSignal.login(externalId, identityHash)
+    fun login(externalId: String, identityHash: String?, jwt: String?, promise: Promise) = guard(promise) {
+        HeroSignal.login(externalId, identityHash, jwt)
+        promise.resolve(null)
+    }
+
+    fun updateUserJwt(jwt: String, promise: Promise) = guard(promise) {
+        HeroSignal.updateUserJwt(jwt)
         promise.resolve(null)
     }
 
@@ -227,6 +232,16 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
 
     fun inboxUnreadCount(promise: Promise) = HeroSignal.Inbox.unreadCount(reply(promise) { it })
 
+    // --- Live Activities: iOS (ActivityKit) özelliğidir; Android'de sessizce yok sayılmaz, açık hatayla reddedilir ---
+
+    fun setupDefaultLiveActivity(promise: Promise) = rejectLiveActivities(promise)
+
+    @Suppress("UNUSED_PARAMETER")
+    fun startDefaultLiveActivity(activityId: String, attributes: ReadableMap, contentState: ReadableMap, promise: Promise) =
+        rejectLiveActivities(promise)
+
+    private fun rejectLiveActivities(promise: Promise) = promise.reject(PLATFORM_NOT_SUPPORTED, LIVE_ACTIVITIES_IOS_ONLY)
+
     // --- Hata ayıklama ---
 
     fun setLogLevel(level: String) = HeroSignal.Debug.setLogLevel(logLevel(level))
@@ -261,5 +276,7 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
 
     companion object {
         const val NAME = "HeroSignal"
+        const val PLATFORM_NOT_SUPPORTED = "PLATFORM_NOT_SUPPORTED"
+        const val LIVE_ACTIVITIES_IOS_ONLY = "Live Activities yalnızca iOS'ta desteklenir"
     }
 }

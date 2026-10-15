@@ -94,10 +94,18 @@ RCT_EXPORT_METHOD(setConsentGiven:(BOOL)given)
 
 RCT_EXPORT_METHOD(login:(NSString *)externalId
                   identityHash:(NSString *_Nullable)identityHash
+                  jwt:(NSString *_Nullable)jwt
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 {
-  [[HeroSignalRNBridge shared] login:externalId identityHash:identityHash resolve:resolve reject:reject];
+  [[HeroSignalRNBridge shared] login:externalId identityHash:identityHash jwt:jwt resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(updateUserJwt:(NSString *)jwt
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[HeroSignalRNBridge shared] updateUserJwt:jwt resolve:resolve reject:reject];
 }
 
 RCT_EXPORT_METHOD(logout)
@@ -350,6 +358,22 @@ RCT_EXPORT_METHOD(inboxArchive:(NSString *)id
 RCT_EXPORT_METHOD(inboxUnreadCount:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 {
   [[HeroSignalRNBridge shared] inboxUnreadCount:resolve reject:reject];
+}
+
+#pragma mark - Live Activities
+
+RCT_EXPORT_METHOD(setupDefaultLiveActivity:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[HeroSignalRNBridge shared] setupDefaultLiveActivity:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(startDefaultLiveActivity:(NSString *)activityId
+                  attributes:(NSDictionary *)attributes
+                  contentState:(NSDictionary *)contentState
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[HeroSignalRNBridge shared] startDefaultLiveActivity:activityId attributes:attributes contentState:contentState resolve:resolve reject:reject];
 }
 
 #pragma mark - Hata ayıklama

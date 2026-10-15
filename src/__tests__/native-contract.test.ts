@@ -64,4 +64,42 @@ describe('yerel sözleşme', () => {
     expect(swift).toContain('@objc public func emails() -> [String] { HeroSignal.User.emails }');
     expect(swift).toContain('@objc public func smsNumbers() -> [String] { HeroSignal.User.smsNumbers }');
   });
+
+  test('JWT identity verification yerel SDK çağrılarına iletilir', () => {
+    expect(methods).toEqual(expect.arrayContaining(['login', 'updateUserJwt']));
+    const impl = read('android/src/main/java/com/herosignal/reactnative/HeroSignalModuleImpl.kt');
+    expect(impl).toContain('HeroSignal.login(externalId, identityHash, jwt)');
+    expect(impl).toContain('HeroSignal.updateUserJwt(jwt)');
+
+    const mm = read('ios/HeroSignalRN.mm');
+    expect(mm).toContain('[[HeroSignalRNBridge shared] login:externalId identityHash:identityHash jwt:jwt resolve:resolve reject:reject]');
+    expect(mm).toContain('[[HeroSignalRNBridge shared] updateUserJwt:jwt resolve:resolve reject:reject]');
+    const swift = read('ios/HeroSignalRNBridge.swift');
+    expect(swift).toContain('HeroSignal.login(externalId, identityHash: identityHash, jwt: jwt)');
+    expect(swift).toContain('try HeroSignal.updateUserJwt(jwt)');
+  });
+
+  test('Live Activities: iOS yerel SDK çağrılarına bağlı, Android PLATFORM_NOT_SUPPORTED ile reddeder', () => {
+    expect(methods).toEqual(expect.arrayContaining(['setupDefaultLiveActivity', 'startDefaultLiveActivity']));
+
+    const mm = read('ios/HeroSignalRN.mm');
+    expect(mm).toContain('[[HeroSignalRNBridge shared] setupDefaultLiveActivity:resolve reject:reject]');
+    expect(mm).toContain(
+      '[[HeroSignalRNBridge shared] startDefaultLiveActivity:activityId attributes:attributes contentState:contentState resolve:resolve reject:reject]',
+    );
+    const swift = read('ios/HeroSignalRNBridge.swift');
+    expect(swift).toContain('try HeroSignal.LiveActivities.setupDefaultLiveActivity()');
+    expect(swift).toContain('try HeroSignal.LiveActivities.startDefaultLiveActivity(activityId: activityId, attributes: attributes, contentState: contentState)');
+    // SDK hata kodu (PLATFORM_NOT_SUPPORTED / NOT_READY / INVALID_ARGUMENT / LIVE_ACTIVITY_FAILED) aynen iletilir.
+    expect(swift).toContain('catch let error as HSLiveActivityError');
+    expect(swift).toContain('reject(error.code, error.message, error)');
+    expect(swift).toContain('reject("LIVE_ACTIVITY_FAILED", error.localizedDescription, error)');
+
+    const impl = read('android/src/main/java/com/herosignal/reactnative/HeroSignalModuleImpl.kt');
+    expect(impl).toContain('fun setupDefaultLiveActivity(promise: Promise) = rejectLiveActivities(promise)');
+    expect(impl).toMatch(/fun startDefaultLiveActivity\([^)]*\) =\s+rejectLiveActivities\(promise\)/);
+    expect(impl).toContain('promise.reject(PLATFORM_NOT_SUPPORTED, LIVE_ACTIVITIES_IOS_ONLY)');
+    expect(impl).toContain('const val PLATFORM_NOT_SUPPORTED = "PLATFORM_NOT_SUPPORTED"');
+    expect(impl).toContain('const val LIVE_ACTIVITIES_IOS_ONLY = "Live Activities yalnızca iOS\'ta desteklenir"');
+  });
 });
