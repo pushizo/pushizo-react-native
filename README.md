@@ -110,6 +110,8 @@ Ardından `npx expo prebuild` (veya EAS Build). Plugin şunları yapar:
 | `androidSmallIcon` | string | PNG (beyaz şekil, saydam arka plan). |
 | `androidAccentColor` | `#RRGGBB` | Bildirim vurgu rengi. |
 | `androidDefaultChannelId` / `androidDefaultChannelName` | string | Erken başlatmada varsayılan bildirim kanalı (JS `defaultChannelId` / `defaultChannelName` ile aynı olmalı). |
+| `iosLocationUsageDescription` | string | Konum paylaşımı için Info.plist `NSLocationWhenInUseUsageDescription` metni. Verilmezse Info.plist'e dokunulmaz. |
+| `androidLocationPermission` | `coarse` \| `fine` | Konum paylaşımı için manifest izni: `coarse` → `ACCESS_COARSE_LOCATION`, `fine` → ek olarak `ACCESS_FINE_LOCATION`. Verilmezse izin eklenmez; arka plan konum izni hiçbir zaman eklenmez. |
 
 Geçersiz seçenekler `prebuild` sırasında hangi alanın nasıl düzeltileceğini söyleyen hatayla durur.
 
@@ -225,6 +227,45 @@ await HeroSignal.LiveActivities.startDefaultLiveActivity('order_42', { title: 'S
 - Kendi tip-güvenli `ActivityAttributes` türünüzü kullanmak isterseniz iOS yerel tarafında (AppDelegate)
   `HeroSignal.LiveActivities.register(MyAttributes.self)` çağırın; ayrıntı `docs/sdk/ios.md` → "Live Activities".
 
+### Konum
+
+Konum paylaşımı isteğe bağlıdır ve **yalnızca ön planda** çalışır (arka plan konumu yoktur). Paylaşım açık ve izin
+verilmişken yerel SDK, oturum başında ve uygulama ön plana döndüğünde en sık 5 dakikada bir yaklaşık konumu push
+aboneliğine yazar (`PATCH /sdk/v1/apps/{appId}/subscriptions/{id}` → `location: { lat, lng, accuracy_m }`); istekler
+yerel SDK'nın kalıcı kuyruğuyla gider. İzin yoksa sessizce gönderilmez.
+
+```ts
+const granted = await HeroSignal.Location.requestPermission('Yakındaki mağazaları göstermek için konumunuzu kullanırız.');
+if (granted) HeroSignal.Location.setShared(true);
+
+const shared = await HeroSignal.Location.isShared(); // kalıcı tercih (izin durumundan bağımsız)
+HeroSignal.Location.setShared(false);                // sunucudaki konum ve rıza kaydı silinir
+```
+
+| API | Açıklama |
+|-----|----------|
+| `Location.setShared(shared)` | Paylaşımı açar/kapatır; tercih cihazda kalıcıdır. Açılırken izin varsa konum hemen gönderilir. |
+| `Location.isShared()` | `Promise<boolean>`: paylaşım tercihi (izin verilip verilmediğini göstermez). |
+| `Location.requestPermission(rationale?)` | `Promise<boolean>`: önce açıklama diyaloğu (`rationale`, verilmezse SDK'nın tr/en varsayılan metni), kullanıcı "Devam" derse sistem izni. İzin zaten varsa veya verildiyse `true`; "Şimdi değil", ret ya da kalıcı ret `false`. |
+
+- **iOS:** `Info.plist`'e `NSLocationWhenInUseUsageDescription` ekleyin (Expo: `iosLocationUsageDescription`). Anahtar
+  yoksa `requestPermission` `false` döner. Yalnızca "kullanırken" izni istenir (Always istenmez); reddedilmiş/kısıtlı
+  izin yeniden sorulamaz, kullanıcıyı Ayarlar'a yönlendirin.
+- **Android:** köprü izin eklemez; uygulamanın `AndroidManifest.xml` dosyasına ekleyin (Expo: `androidLocationPermission`):
+
+  ```xml
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+  <!-- isteğe bağlı, hassas konum -->
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  ```
+
+  Manifest'te konum izni yoksa `requestPermission` uyarı loglar ve `false` döner; ön planda `ReactActivity` yoksa
+  `NO_ACTIVITY` ile reddedilir. `ACCESS_BACKGROUND_LOCATION` gerekmez ve istenmez.
+- **KVKK:** sunucuya ulaşan ilk konum açık rıza kaydı olarak saklanır; açıklama metninde amacı açıkça belirtin.
+  `requiresPrivacyConsent` ile başlatıldıysa `setConsentGiven(true)` gelene kadar konum gönderilmez.
+- **Silme:** `setShared(false)` sunucuya `location: null` gönderir; konum ve rıza kaydı silinir, bekleyen konum
+  gönderilmez.
+
 ### Gizlilik (KVKK/GDPR)
 
 `initialize(appId, { requiresPrivacyConsent: true })` ile başlatıldığında `HeroSignal.setConsentGiven(true)` çağrılana
@@ -246,8 +287,8 @@ SDK'yı yeniden kurmaz.
 ### Hata kodları
 
 Promise reddi `code` alanı: `INVALID_ARGUMENT` (geçersiz e-posta/telefon/alias/trigger/tercih), `NOT_READY`
-(`initialize` çağrılmadı veya abonelik henüz kayıtlı değil), `NO_ACTIVITY` (Android'de izin isteği için ön planda
-Activity yok), `PLATFORM_NOT_SUPPORTED` / `LIVE_ACTIVITY_FAILED` (Live Activities), sunucu hata kodları
+(`initialize` çağrılmadı veya abonelik henüz kayıtlı değil), `NO_ACTIVITY` (Android'de bildirim/konum izni isteği için
+ön planda Activity yok), `PLATFORM_NOT_SUPPORTED` / `LIVE_ACTIVITY_FAILED` (Live Activities), sunucu hata kodları
 (`HSApiError.code` / `HsApiException.code`) ve `HS_ERROR`.
 
 ## iOS Notification Service Extension (NSE)

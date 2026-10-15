@@ -2,6 +2,7 @@
 
 export type ApnsMode = 'development' | 'production';
 export type PluginLogLevel = 'none' | 'error' | 'warn' | 'info' | 'debug';
+export type AndroidLocationPermission = 'coarse' | 'fine';
 
 export interface HeroSignalPluginProps {
   /** APNs ortamı → `aps-environment` yetkisi (zorunlu). Mağaza/TestFlight derlemesi için `production`. */
@@ -37,6 +38,16 @@ export interface HeroSignalPluginProps {
   androidDefaultChannelId?: string;
   /** Erken başlatmada varsayılan Android bildirim kanalının kullanıcıya görünen adı (JS `defaultChannelName`). */
   androidDefaultChannelName?: string;
+  /**
+   * Konum paylaşımı (`HeroSignal.Location`) için iOS "kullanırken" izin açıklaması → Info.plist
+   * `NSLocationWhenInUseUsageDescription`. Verilmezse Info.plist'e dokunulmaz (uygulama `ios.infoPlist` ile ekleyebilir).
+   */
+  iosLocationUsageDescription?: string;
+  /**
+   * Konum paylaşımı için Android manifest izni: `coarse` → `ACCESS_COARSE_LOCATION`, `fine` → ek olarak
+   * `ACCESS_FINE_LOCATION`. Verilmezse izin eklenmez; arka plan konum izni hiçbir zaman eklenmez.
+   */
+  androidLocationPermission?: AndroidLocationPermission;
 }
 
 export interface ResolvedProps extends HeroSignalPluginProps {
@@ -60,6 +71,8 @@ const KNOWN_KEYS = new Set<keyof HeroSignalPluginProps>([
   'androidAccentColor',
   'androidDefaultChannelId',
   'androidDefaultChannelName',
+  'iosLocationUsageDescription',
+  'androidLocationPermission',
 ]);
 
 const PREFIX = '@herosignal/react-native config plugin';
@@ -99,7 +112,7 @@ export function validateProps(input: unknown): ResolvedProps {
     fail('"mode" zorunlu ve "development" ya da "production" olmalı (APNs aps-environment).');
   }
 
-  for (const key of ['appId', 'apiUrl', 'iosAppGroup', 'iosDeploymentTarget', 'devTeam', 'iosSdkPath', 'androidSdkPath', 'androidSmallIcon', 'androidAccentColor', 'androidDefaultChannelId', 'androidDefaultChannelName']) {
+  for (const key of ['appId', 'apiUrl', 'iosAppGroup', 'iosDeploymentTarget', 'devTeam', 'iosSdkPath', 'androidSdkPath', 'androidSmallIcon', 'androidAccentColor', 'androidDefaultChannelId', 'androidDefaultChannelName', 'iosLocationUsageDescription']) {
     optionalString(props, key);
   }
   optionalBoolean(props, 'requiresPrivacyConsent');
@@ -127,7 +140,10 @@ export function validateProps(input: unknown): ResolvedProps {
   if (props.androidDefaultChannelId !== undefined && !/^[A-Za-z0-9._-]{1,100}$/.test(props.androidDefaultChannelId as string)) {
     fail('"androidDefaultChannelId" yalnızca harf, rakam, nokta, alt çizgi ve tire içermeli (en çok 100 karakter, ör. "herosignal_default").');
   }
-  if (props.androidSmallIcon !== undefined && !/\.png$/i.test(props.androidSmallIcon as string)) {
+  if (props.androidLocationPermission !== undefined && props.androidLocationPermission !== 'coarse' && props.androidLocationPermission !== 'fine') {
+    fail('"androidLocationPermission" "coarse" (yaklaşık konum) ya da "fine" (hassas konum) olmalı.');
+  }
+  if (props.androidSmallIcon !== undefined &&!/\.png$/i.test(props.androidSmallIcon as string)) {
     fail('"androidSmallIcon" bir PNG dosyası olmalı (beyaz şekil + saydam arka plan).');
   }
 

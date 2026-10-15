@@ -41,9 +41,19 @@ export const ICON_SIZES: Record<string, number> = {
 
 type AndroidManifest = AndroidConfig.Manifest.AndroidManifest;
 
-/** POST_NOTIFICATIONS izni ve meta-data (ikon, renk, erken başlatma). Saf fonksiyon: test edilebilir. */
+/** `androidLocationPermission` → ön plan konum izinleri (Android 12+ hassas izin yaklaşık izinle birlikte istenir). */
+export const LOCATION_PERMISSIONS = {
+  coarse: ['android.permission.ACCESS_COARSE_LOCATION'],
+  fine: ['android.permission.ACCESS_COARSE_LOCATION', 'android.permission.ACCESS_FINE_LOCATION'],
+} as const;
+
+/** POST_NOTIFICATIONS (ve isteğe bağlı konum) izni ve meta-data (ikon, renk, erken başlatma). Saf fonksiyon: test edilebilir. */
 export function applyAndroidManifest(manifest: AndroidManifest, props: ResolvedProps): AndroidManifest {
   AndroidConfig.Permissions.ensurePermissions(manifest, ['android.permission.POST_NOTIFICATIONS']);
+  // Konum izni yalnızca açıkça istenirse eklenir; verilmezse uygulamanın kendi izinlerine dokunulmaz.
+  if (props.androidLocationPermission) {
+    AndroidConfig.Permissions.ensurePermissions(manifest, [...LOCATION_PERMISSIONS[props.androidLocationPermission]]);
+  }
   const app = AndroidConfig.Manifest.getMainApplicationOrThrow(manifest);
   const set = (name: string, value: string, type: 'value' | 'resource' = 'value') =>
     AndroidConfig.Manifest.addMetaDataItemToMainApplication(app, name, value, type);

@@ -455,6 +455,19 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
         }
     }
 
+    // MARK: - Konum (v2 Faz 17b; yalnızca ön plan, arka plan konumu yok)
+
+    /// Paylaşım tercihi kalıcıdır; kapatınca yerel SDK sunucuya `location: null` gönderir (konum ve rıza kaydı silinir).
+    @objc public func setLocationShared(_ shared: Bool) { HeroSignal.Location.setShared(shared) }
+
+    @objc public func isLocationShared(_ resolve: @escaping (Any?) -> Void) { resolve(HeroSignal.Location.isShared) }
+
+    /// Açıklama uyarısı (boş metin → SDK'nın tr/en varsayılanı) ve "kullanırken" izni; sonuç yerel SDK'dan ana iş parçacığında gelir.
+    @objc public func requestLocationPermission(_ rationale: String?, resolve: @escaping (Any?) -> Void) {
+        let text = rationale.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+        HeroSignal.Location.requestPermission(rationale: text) { granted in resolve(granted) }
+    }
+
     // MARK: - Hata ayıklama
 
     @objc public func setLogLevel(_ level: String) { HeroSignal.Debug.setLogLevel(Self.logLevel(level)) }

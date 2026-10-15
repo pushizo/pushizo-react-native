@@ -204,6 +204,18 @@ class HeroSignalModule(reactContext: ReactApplicationContext) : NativeHeroSignal
         impl.startDefaultLiveActivity(activityId, attributes, contentState, promise)
     }
 
+    override fun setLocationShared(shared: Boolean) {
+        impl.setLocationShared(shared)
+    }
+
+    override fun isLocationShared(promise: Promise) {
+        impl.isLocationShared(promise)
+    }
+
+    override fun requestLocationPermission(rationale: String?, promise: Promise) {
+        impl.requestLocationPermission(rationale, promise)
+    }
+
     override fun setLogLevel(level: String) {
         impl.setLogLevel(level)
     }

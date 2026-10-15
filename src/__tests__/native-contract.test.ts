@@ -102,4 +102,43 @@ describe('yerel sözleşme', () => {
     expect(impl).toContain('const val PLATFORM_NOT_SUPPORTED = "PLATFORM_NOT_SUPPORTED"');
     expect(impl).toContain('const val LIVE_ACTIVITIES_IOS_ONLY = "Live Activities yalnızca iOS\'ta desteklenir"');
   });
+
+  test('Konum: yerel SDK Location API\'sine bağlı; Android izin akışı PermissionAwareActivity ile yürür', () => {
+    expect(methods).toEqual(expect.arrayContaining(['setLocationShared', 'isLocationShared', 'requestLocationPermission']));
+
+    const impl = read('android/src/main/java/com/herosignal/reactnative/HeroSignalModuleImpl.kt');
+    expect(impl).toContain('fun setLocationShared(shared: Boolean) = HeroSignal.Location.setShared(shared)');
+    expect(impl).toContain('fun isLocationShared(promise: Promise) = promise.resolve(HeroSignal.Location.isShared)');
+    // 1) İzin zaten varsa SDK'ya bildirilir ve true döner.
+    expect(impl).toMatch(/if \(HeroSignal\.Location\.permissionGranted\) \{\s+HeroSignal\.Location\.onPermissionResult\(\)\s+promise\.resolve\(true\)/);
+    // 2) Yalnızca manifest'te tanımlı ön plan izinleri istenir; arka plan konumu yok.
+    expect(impl).toContain('context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)');
+    expect(impl).toContain('Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION');
+    expect(impl).not.toContain('ACCESS_BACKGROUND_LOCATION');
+    expect(impl).toMatch(/if \(permissions\.isEmpty\(\)\) \{\s+HsLog\.w\([^)]*\)\s+promise\.resolve\(false\)/);
+    // 3) Activity yoksa köprünün NO_ACTIVITY deseni.
+    expect(impl).toMatch(/if \(activity !is PermissionAwareActivity\) \{\s+promise\.reject\("NO_ACTIVITY"/);
+    // 4) Açıklama diyaloğu SDK string kaynaklarıyla; "Devam" dışındaki kapanış false.
+    expect(impl).toContain('import com.herosignal.sdk.R');
+    for (const name of ['hs_location_rationale_title', 'hs_location_rationale_message', 'hs_location_rationale_continue', 'hs_location_rationale_not_now']) {
+      expect(impl).toContain(`R.string.${name}`);
+    }
+    expect(impl).toContain("rationale?.takeIf { it.isNotBlank() } ?: activity.getString(R.string.hs_location_rationale_message)");
+    expect(impl).toContain('.setOnDismissListener { if (!proceeding) promise.resolve(false) }');
+    // 5) Sistem izni SDK istek koduyla; sonuçta onPermissionResult ve güncel izin.
+    expect(impl).toContain('activity.requestPermissions(permissions, HeroSignal.Location.PERMISSION_REQUEST_CODE, listener)');
+    expect(impl).toContain('if (requestCode != HeroSignal.Location.PERMISSION_REQUEST_CODE) return@PermissionListener false');
+    expect(impl).toMatch(/HeroSignal\.Location\.onPermissionResult\(\)\s+promise\.resolve\(HeroSignal\.Location\.permissionGranted\)/);
+
+    const mm = read('ios/HeroSignalRN.mm');
+    expect(mm).toContain('[[HeroSignalRNBridge shared] setLocationShared:shared];');
+    expect(mm).toContain('[[HeroSignalRNBridge shared] isLocationShared:resolve];');
+    expect(mm).toContain('RCT_EXPORT_METHOD(requestLocationPermission:(NSString *_Nullable)rationale');
+    expect(mm).toContain('[[HeroSignalRNBridge shared] requestLocationPermission:rationale resolve:resolve];');
+    const swift = read('ios/HeroSignalRNBridge.swift');
+    expect(swift).toContain('@objc public func setLocationShared(_ shared: Bool) { HeroSignal.Location.setShared(shared) }');
+    expect(swift).toContain('@objc public func isLocationShared(_ resolve: @escaping (Any?) -> Void) { resolve(HeroSignal.Location.isShared) }');
+    expect(swift).toContain('@objc public func requestLocationPermission(_ rationale: String?, resolve: @escaping (Any?) -> Void)');
+    expect(swift).toContain('HeroSignal.Location.requestPermission(rationale: text) { granted in resolve(granted) }');
+  });
 });
