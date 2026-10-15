@@ -227,6 +227,14 @@ await HeroSignal.LiveActivities.startDefaultLiveActivity('order_42', { title: 'S
 - Kendi tip-güvenli `ActivityAttributes` türünüzü kullanmak isterseniz iOS yerel tarafında (AppDelegate)
   `HeroSignal.LiveActivities.register(MyAttributes.self)` çağırın; ayrıntı `docs/sdk/ios.md` → "Live Activities".
 
+### HTML in-app ve carousel
+
+In-app mesajları yerel Android/iOS SDK'sı çizer; bu paket köprüdür. HTML in-app (sandbox'lı WebView, köprü
+`close`/`click`/`addTag`/`trackEvent`) ve carousel blokları yerel SDK'dan olduğu gibi devralınır: ek kod veya
+yapılandırma gerekmez, tıklama ve yaşam döngüsü olayları mevcut in-app dinleyicilerine gelir. Yetenek bildirimi
+(`supports=html,carousel`) yerel SDK tarafından yapılır; desteklemeyen eski yerel sürümlere sunucu HTML mesaj göndermez
+ve carousel bloklarını çıkarır (ADR-0027 §6–7).
+
 ### Konum
 
 Konum paylaşımı isteğe bağlıdır ve **yalnızca ön planda** çalışır (arka plan konumu yoktur). Paylaşım açık ve izin
