@@ -1,6 +1,8 @@
 package com.herosignal.reactnative
 
 import android.Manifest
+import android.app.AlertDialog
+import android.content.pm.PackageManager
 import android.os.Build
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
@@ -13,6 +15,8 @@ import com.facebook.react.modules.core.PermissionListener
 import com.herosignal.sdk.HeroSignal
 import com.herosignal.sdk.HsApiException
 import com.herosignal.sdk.HsCallback
+import com.herosignal.sdk.HsLog
+import com.herosignal.sdk.R
 
 /**
  * Yeni (TurboModule) ve eski mimari modüllerinin ortak gövdesi: JS çağrılarını Android SDK'ya (`com.herosignal.sdk`)
@@ -242,6 +246,72 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
 
     private fun rejectLiveActivities(promise: Promise) = promise.reject(PLATFORM_NOT_SUPPORTED, LIVE_ACTIVITIES_IOS_ONLY)
 
+    // --- Konum (v2 Faz 17b; yalnızca ön plan, arka plan konumu yok) ---
+
+    fun setLocationShared(shared: Boolean) = HeroSignal.Location.setShared(shared)
+
+    fun isLocationShared(promise: Promise) = promise.resolve(HeroSignal.Location.isShared)
+
+    /**
+     * Yerel SDK'nın `Location.requestPermission(activity)` çağrısı sonucu bildirmediğinden akış köprüde yürütülür:
+     * açıklama diyaloğu (SDK string kaynakları), ardından React Native'in [PermissionAwareActivity] akışıyla sistem izni
+     * ([HeroSignal.Location.PERMISSION_REQUEST_CODE]); sonuçta SDK'ya [HeroSignal.Location.onPermissionResult] bildirilir.
+     * Uygulama manifest'inde konum izni yoksa izin istenemez ve `false` döner.
+     */
+    fun requestLocationPermission(rationale: String?, promise: Promise) {
+        if (HeroSignal.Location.permissionGranted) {
+            HeroSignal.Location.onPermissionResult()
+            promise.resolve(true)
+            return
+        }
+        val permissions = declaredLocationPermissions()
+        if (permissions.isEmpty()) {
+            HsLog.w("konum izni istenemedi: uygulama manifest'inde ACCESS_COARSE_LOCATION/ACCESS_FINE_LOCATION yok")
+            promise.resolve(false)
+            return
+        }
+        val activity = context.currentActivity
+        if (activity !is PermissionAwareActivity) {
+            promise.reject("NO_ACTIVITY", "İzin istemek için ön planda bir ReactActivity gerekli.")
+            return
+        }
+        val listener = PermissionListener { requestCode, _, _ ->
+            if (requestCode != HeroSignal.Location.PERMISSION_REQUEST_CODE) return@PermissionListener false
+            // İzin verildiyse ve paylaşım açıksa yerel SDK konumu hemen gönderir.
+            HeroSignal.Location.onPermissionResult()
+            promise.resolve(HeroSignal.Location.permissionGranted)
+            true
+        }
+        UiThreadUtil.runOnUiThread {
+            if (activity.isFinishing || activity.isDestroyed) {
+                promise.resolve(false)
+                return@runOnUiThread
+            }
+            // "Devam" dışındaki her kapanış (Şimdi değil, geri tuşu, dışına dokunma) reddedilmiş sayılır; Promise bir kez çözülür.
+            var proceeding = false
+            AlertDialog.Builder(activity)
+                .setTitle(R.string.hs_location_rationale_title)
+                .setMessage(rationale?.takeIf { it.isNotBlank() } ?: activity.getString(R.string.hs_location_rationale_message))
+                .setPositiveButton(R.string.hs_location_rationale_continue) { _, _ ->
+                    proceeding = true
+                    activity.requestPermissions(permissions, HeroSignal.Location.PERMISSION_REQUEST_CODE, listener)
+                }
+                .setNegativeButton(R.string.hs_location_rationale_not_now, null)
+                .setOnDismissListener { if (!proceeding) promise.resolve(false) }
+                .show()
+        }
+    }
+
+    /** Uygulama manifest'inde tanımlı konum izinleri; yalnızca bunlar çalışma zamanında istenebilir. */
+    private fun declaredLocationPermissions(): Array<String> = try {
+        val info = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+        val requested = info.requestedPermissions?.toSet().orEmpty()
+        LOCATION_PERMISSIONS.filter { it in requested }.toTypedArray()
+    } catch (e: PackageManager.NameNotFoundException) {
+        HsLog.w("uygulama paket bilgisi okunamadı", e)
+        emptyArray()
+    }
+
     // --- Hata ayıklama ---
 
     fun setLogLevel(level: String) = HeroSignal.Debug.setLogLevel(logLevel(level))
@@ -278,5 +348,8 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
         const val NAME = "HeroSignal"
         const val PLATFORM_NOT_SUPPORTED = "PLATFORM_NOT_SUPPORTED"
         const val LIVE_ACTIVITIES_IOS_ONLY = "Live Activities yalnızca iOS'ta desteklenir"
+
+        /** Ön plan konum izinleri (yerel SDK ile aynı küme); arka plan konumu istenmez. */
+        private val LOCATION_PERMISSIONS = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
     }
 }

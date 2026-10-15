@@ -553,6 +553,34 @@ const LiveActivities = {
   },
 };
 
+/**
+ * Konum paylaşımı (v2 Faz 17b; yalnızca ön plan, arka plan konumu yok). Paylaşım açık ve izin verilmişken yerel SDK,
+ * oturum başında ve uygulama ön plana döndüğünde en sık 5 dakikada bir konumu push aboneliğine yazar. İzin yoksa veya
+ * gizlilik onayı verilmemişse hiçbir şey gönderilmez. İlk konum sunucuda KVKK açık rıza kaydı sayılır.
+ */
+const Location = {
+  /** Paylaşımı açar/kapatır (kalıcı tercih). `false` sunucudaki konumu ve rıza kaydını sildirir. */
+  setShared(shared: boolean): void {
+    nativeModule().setLocationShared(shared === true);
+  },
+  /** Paylaşım açık mı (kalıcı tercih; izin durumundan bağımsız). */
+  async isShared(): Promise<boolean> {
+    return (await nativeModule().isLocationShared()) === true;
+  },
+  /**
+   * Önce açıklama diyaloğu (`rationale`, verilmezse SDK'nın tr/en varsayılan metni), kullanıcı devam ederse sistem konum
+   * izni ("kullanırken"). Sonuç: izin var mı / verildi mi. Android'de manifest'te konum izni yoksa `false`; ön planda
+   * Activity yoksa `NO_ACTIVITY` koduyla reddedilir.
+   */
+  async requestPermission(rationale?: string): Promise<boolean> {
+    if (rationale !== undefined && rationale !== null && typeof rationale !== 'string') {
+      throw new TypeError('HeroSignal: rationale metin olmalı.');
+    }
+    const text = typeof rationale === 'string' && rationale.trim() !== '' ? rationale : null;
+    return (await nativeModule().requestLocationPermission(text)) === true;
+  },
+};
+
 const Debug = {
   setLogLevel(level: LogLevel): void {
     if (!LOG_LEVELS.includes(level)) throw new TypeError(`HeroSignal: geçersiz günlük seviyesi '${String(level)}'.`);
@@ -622,5 +650,6 @@ export const HeroSignal = {
   Inbox,
   Session,
   LiveActivities,
+  Location,
   Debug,
 };

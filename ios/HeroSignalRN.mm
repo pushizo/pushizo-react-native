@@ -376,6 +376,25 @@ RCT_EXPORT_METHOD(startDefaultLiveActivity:(NSString *)activityId
   [[HeroSignalRNBridge shared] startDefaultLiveActivity:activityId attributes:attributes contentState:contentState resolve:resolve reject:reject];
 }
 
+#pragma mark - Konum
+
+RCT_EXPORT_METHOD(setLocationShared:(BOOL)shared)
+{
+  [[HeroSignalRNBridge shared] setLocationShared:shared];
+}
+
+RCT_EXPORT_METHOD(isLocationShared:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[HeroSignalRNBridge shared] isLocationShared:resolve];
+}
+
+RCT_EXPORT_METHOD(requestLocationPermission:(NSString *_Nullable)rationale
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[HeroSignalRNBridge shared] requestLocationPermission:rationale resolve:resolve];
+}
+
 #pragma mark - Hata ayıklama
 
 RCT_EXPORT_METHOD(setLogLevel:(NSString *)level)

@@ -12,7 +12,7 @@ import type { XCBuildConfiguration } from 'xcode';
 import * as zlib from 'zlib';
 import withHeroSignal from '../src';
 import { applyAndroidManifest, applySettingsGradle, copyGoogleServicesFile, ICON_RESOURCE, ICON_SIZES, META } from '../src/android';
-import { addNseTarget, applyAppDelegate, applyEntitlements, applyInfoPlist, applyPodfile, buildNseInfoPlist, NSE_TARGET, PLIST } from '../src/ios';
+import { addNseTarget, applyAppDelegate, applyEntitlements, applyInfoPlist, applyPodfile, buildNseInfoPlist, LOCATION_USAGE_KEY, NSE_TARGET, PLIST } from '../src/ios';
 import { validateProps } from '../src/props';
 
 
@@ -143,6 +143,8 @@ describe('validateProps', () => {
     [{ ...BASE, requiresPrivacyConsent: 'yes' }, '"requiresPrivacyConsent"'],
     [{ ...BASE, androidDefaultChannelId: 'kanal adı' }, '"androidDefaultChannelId"'],
     [{ ...BASE, androidDefaultChannelName: '' }, '"androidDefaultChannelName"'],
+    [{ ...BASE, androidLocationPermission: 'background' }, '"androidLocationPermission"'],
+    [{ ...BASE, iosLocationUsageDescription: ' ' }, '"iosLocationUsageDescription"'],
   ])('geçersiz seçenek açık hata verir: %j', (input, message) => {
     expect(() => validateProps(input)).toThrow(message);
   });
@@ -191,6 +193,15 @@ describe('iOS dönüşümleri', () => {
     expect(cleared).not.toHaveProperty(PLIST.requiresConsent);
     expect(cleared).not.toHaveProperty(PLIST.logLevel);
     expect(cleared).not.toHaveProperty(PLIST.appId);
+  });
+
+  test('Info.plist: konum açıklaması yalnızca verilirse yazılır, verilmezse uygulamanın değeri korunur', () => {
+    const withLocation = validateProps({ ...BASE, iosLocationUsageDescription: 'Yakındaki mağazalar için konumunuzu kullanırız.' });
+    const p = applyInfoPlist<Record<string, unknown>>({}, withLocation, 'group.x');
+    expect(p[LOCATION_USAGE_KEY]).toBe('Yakındaki mağazalar için konumunuzu kullanırız.');
+    const kept = applyInfoPlist<Record<string, unknown>>({ [LOCATION_USAGE_KEY]: 'Uygulamanın metni' }, props, 'group.x');
+    expect(kept[LOCATION_USAGE_KEY]).toBe('Uygulamanın metni');
+    expect(applyInfoPlist<Record<string, unknown>>({}, props, 'group.x')).not.toHaveProperty(LOCATION_USAGE_KEY);
   });
 
   test('yerel köprüler plugin anahtarlarını okur (Info.plist ve manifest sözleşmesi)', () => {
@@ -330,6 +341,22 @@ describe('Android dönüşümleri', () => {
       [META.channelId]: 'campaigns',
       [META.channelName]: 'Kampanyalar',
     });
+  });
+
+  test('konum izni yalnızca androidLocationPermission ile eklenir; arka plan konumu hiçbir zaman eklenmez', async () => {
+    const location = (perms: string[]) => perms.filter((p) => p.includes('LOCATION')).sort();
+    const none = applyAndroidManifest(await manifest(), validateProps(BASE));
+    expect(location(AndroidConfig.Permissions.getPermissions(none))).toEqual([]);
+    const coarse = applyAndroidManifest(await manifest(), validateProps({ ...BASE, androidLocationPermission: 'coarse' }));
+    expect(location(AndroidConfig.Permissions.getPermissions(coarse))).toEqual(['android.permission.ACCESS_COARSE_LOCATION']);
+    const fine = applyAndroidManifest(
+      applyAndroidManifest(await manifest(), validateProps({ ...BASE, androidLocationPermission: 'fine' })),
+      validateProps({ ...BASE, androidLocationPermission: 'fine' }),
+    );
+    expect(location(AndroidConfig.Permissions.getPermissions(fine))).toEqual([
+      'android.permission.ACCESS_COARSE_LOCATION',
+      'android.permission.ACCESS_FINE_LOCATION',
+    ]);
   });
 
   test('google-services.json android/app altına kopyalanır; dosya yoksa alanı söyleyen hata', async () => {

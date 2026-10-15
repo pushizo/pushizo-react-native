@@ -26,6 +26,9 @@ export const PLIST = {
   logLevel: 'HeroSignalLogLevel',
 } as const;
 
+/** iOS SDK `HeroSignal.Location.requestPermission` bu anahtar yoksa izin istemez (false döner). */
+export const LOCATION_USAGE_KEY = 'NSLocationWhenInUseUsageDescription';
+
 type Plist = Record<string, unknown>;
 
 /** Plist dizisindeki metin öğeleri (beklenmeyen tipler atlanır). */
@@ -70,6 +73,8 @@ export function applyInfoPlist<T extends object>(infoPlist: T, props: ResolvedPr
   else delete p[PLIST.requiresConsent];
   if (props.appId && props.logLevel) p[PLIST.logLevel] = props.logLevel;
   else delete p[PLIST.logLevel];
+  // Konum açıklaması isteğe bağlıdır; verilmezse uygulamanın kendi yazdığı değer korunur (silinmez).
+  if (props.iosLocationUsageDescription) p[LOCATION_USAGE_KEY] = props.iosLocationUsageDescription;
   return infoPlist;
 }
 

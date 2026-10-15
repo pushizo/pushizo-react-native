@@ -84,6 +84,9 @@ function createNative(): Record<string, jest.Mock> {
     inboxUnreadCount: resolved(4),
     setupDefaultLiveActivity: resolved(),
     startDefaultLiveActivity: resolved(),
+    setLocationShared: jest.fn(),
+    isLocationShared: resolved(true),
+    requestLocationPermission: resolved(true),
     setLogLevel: jest.fn(),
     addListener: jest.fn(),
     removeListeners: jest.fn(),
@@ -223,6 +226,49 @@ describe('HeroSignal (React Native)', () => {
     const error = Object.assign(new Error("Live Activities yalnızca iOS'ta desteklenir"), { code: 'PLATFORM_NOT_SUPPORTED' });
     env.native.setupDefaultLiveActivity.mockReturnValueOnce(Promise.reject(error));
     await expect(HeroSignal.LiveActivities.setupDefaultLiveActivity()).rejects.toMatchObject({ code: 'PLATFORM_NOT_SUPPORTED' });
+  });
+
+  test('Location: setShared ve isShared yerel modüle iletilir', async () => {
+    const { HeroSignal, env } = load();
+    HeroSignal.Location.setShared(true);
+    HeroSignal.Location.setShared(false);
+    // Mantıksal olmayan değer paylaşımı açmaz (gizlilik açısından güvenli varsayılan).
+    HeroSignal.Location.setShared('true' as never);
+    expect(env.native.setLocationShared.mock.calls).toEqual([[true], [false], [false]]);
+
+    await expect(HeroSignal.Location.isShared()).resolves.toBe(true);
+    env.native.isLocationShared.mockResolvedValueOnce(null);
+    await expect(HeroSignal.Location.isShared()).resolves.toBe(false);
+    expect(env.native.isLocationShared).toHaveBeenCalledTimes(2);
+  });
+
+  test('Location.requestPermission: açıklama metni iletilir, boş metin varsayılana düşer, sonuç döner', async () => {
+    const { HeroSignal, env } = load();
+    await expect(HeroSignal.Location.requestPermission()).resolves.toBe(true);
+    expect(env.native.requestLocationPermission).toHaveBeenLastCalledWith(null);
+    await HeroSignal.Location.requestPermission('Yakındaki mağazaları göstermek için konumunuzu kullanırız.');
+    expect(env.native.requestLocationPermission).toHaveBeenLastCalledWith('Yakındaki mağazaları göstermek için konumunuzu kullanırız.');
+    await HeroSignal.Location.requestPermission('   ');
+    expect(env.native.requestLocationPermission).toHaveBeenLastCalledWith(null);
+    env.native.requestLocationPermission.mockResolvedValueOnce(false);
+    await expect(HeroSignal.Location.requestPermission()).resolves.toBe(false);
+  });
+
+  test('Location.requestPermission: geçersiz açıklama yerel modüle gitmez; NO_ACTIVITY iletilir', async () => {
+    const { HeroSignal, env } = load();
+    await expect(HeroSignal.Location.requestPermission(42 as never)).rejects.toThrow('rationale');
+    expect(env.native.requestLocationPermission).not.toHaveBeenCalled();
+    env.native.requestLocationPermission.mockReturnValueOnce(
+      Promise.reject(Object.assign(new Error('İzin istemek için ön planda bir ReactActivity gerekli.'), { code: 'NO_ACTIVITY' })),
+    );
+    await expect(HeroSignal.Location.requestPermission()).rejects.toMatchObject({ code: 'NO_ACTIVITY' });
+  });
+
+  test('Location: eski mimaride NativeModules.HeroSignal kullanılır', async () => {
+    const { HeroSignal, env } = load({ turbo: false, legacy: true });
+    HeroSignal.Location.setShared(true);
+    await expect(HeroSignal.Location.isShared()).resolves.toBe(true);
+    expect(env.native.setLocationShared).toHaveBeenCalledWith(true);
   });
 
   test('User: tag, alias, dil, e-posta/SMS ve kimlikler', async () => {

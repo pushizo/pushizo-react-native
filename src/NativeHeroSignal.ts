@@ -96,6 +96,14 @@ export interface Spec extends TurboModule {
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
   startDefaultLiveActivity(activityId: string, attributes: Object, contentState: Object): Promise<void>;
 
+  // --- Konum (v2 Faz 17b; yalnızca ön plan) ---
+  /** Konum paylaşımını açar/kapatır (kalıcı); kapatınca sunucudaki konum ve rıza kaydı silinir (`location: null`). */
+  setLocationShared(shared: boolean): void;
+  /** Konum paylaşımı açık mı (kalıcı tercih; izin durumundan bağımsız). */
+  isLocationShared(): Promise<boolean>;
+  /** Açıklama diyaloğu (null → SDK'nın yerelleştirilmiş metni) ve "kullanırken" konum izni; sonuç: izin var/verildi mi. */
+  requestLocationPermission(rationale: string | null): Promise<boolean>;
+
   // --- Hata ayıklama ---
   setLogLevel(level: string): void;
 

@@ -257,6 +257,21 @@ class HeroSignalModule(reactContext: ReactApplicationContext) : ReactContextBase
     }
 
     @ReactMethod
+    fun setLocationShared(shared: Boolean) {
+        impl.setLocationShared(shared)
+    }
+
+    @ReactMethod
+    fun isLocationShared(promise: Promise) {
+        impl.isLocationShared(promise)
+    }
+
+    @ReactMethod
+    fun requestLocationPermission(rationale: String?, promise: Promise) {
+        impl.requestLocationPermission(rationale, promise)
+    }
+
+    @ReactMethod
     fun setLogLevel(level: String) {
         impl.setLogLevel(level)
     }
