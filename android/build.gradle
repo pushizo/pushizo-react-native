@@ -1,4 +1,4 @@
-// HeroSignal React Native köprüsü (Android). Yerel SDK: com.herosignal:herosignal-android (sdk/android).
+// Pushizo React Native köprüsü (Android). Yerel SDK: com.pushizo:pushizo-android (sdk/android).
 buildscript {
     ext.safeExtGet = { name, fallback -> rootProject.ext.has(name) ? rootProject.ext.get(name) : fallback }
     repositories {
@@ -19,18 +19,18 @@ apply plugin: "com.android.library"
 apply plugin: "kotlin-android"
 
 if (isNewArchitectureEnabled()) {
-    // Codegen: package.json "codegenConfig" → NativeHeroSignalSpec (com.herosignal.reactnative).
+    // Codegen: package.json "codegenConfig" → NativePushizoSpec (com.pushizo.reactnative).
     apply plugin: "com.facebook.react"
     react {
         root = file("..")
         jsRootDir = file("../src")
-        libraryName = "RNHeroSignalSpec"
-        codegenJavaPackageName = "com.herosignal.reactnative"
+        libraryName = "RNPushizoSpec"
+        codegenJavaPackageName = "com.pushizo.reactnative"
     }
 }
 
 android {
-    namespace "com.herosignal.reactnative"
+    namespace "com.pushizo.reactnative"
     compileSdkVersion safeExtGet("compileSdkVersion", 35)
 
     defaultConfig {
@@ -74,11 +74,11 @@ repositories {
 dependencies {
     // Sürüm, uygulamanın React Native Gradle eklentisi tarafından belirlenir.
     implementation "com.facebook.react:react-android"
-    // Monorepo / yerel geliştirme: uygulama settings.gradle'ında ":herosignal" modülü (sdk/android/herosignal) varsa
+    // Monorepo / yerel geliştirme: uygulama settings.gradle'ında ":pushizo" modülü (sdk/android/pushizo) varsa
     // kaynaktan, yoksa yayınlanmış artefakttan (Maven Central veya `gradle publishToMavenLocal`) alınır.
-    if (rootProject.findProject(":herosignal") != null) {
-        api project(":herosignal")
+    if (rootProject.findProject(":pushizo") != null) {
+        api project(":pushizo")
     } else {
-        api "com.herosignal:herosignal-android:0.1.0"
+        api "com.pushizo:pushizo-android:0.1.0"
     }
 }

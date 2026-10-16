@@ -1,4 +1,4 @@
-package com.herosignal.reactnative
+package com.pushizo.reactnative
 
 import com.facebook.react.bridge.Dynamic
 import com.facebook.react.bridge.Promise
@@ -9,11 +9,11 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableType
 
-/** Eski mimari (bridge) modülü; gövde [HeroSignalModuleImpl]'dedir. Metot kümesi `src/NativeHeroSignal.ts` ile aynıdır. */
-class HeroSignalModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
-    private val impl = HeroSignalModuleImpl(reactContext)
+/** Eski mimari (bridge) modülü; gövde [PushizoModuleImpl]'dedir. Metot kümesi `src/NativePushizo.ts` ile aynıdır. */
+class PushizoModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
+    private val impl = PushizoModuleImpl(reactContext)
 
-    override fun getName(): String = HeroSignalModuleImpl.NAME
+    override fun getName(): String = PushizoModuleImpl.NAME
 
     override fun invalidate() {
         impl.invalidate()

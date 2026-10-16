@@ -1,39 +1,39 @@
 import Foundation
-import HeroSignal
-// SPM: ayrı modül; CocoaPods alt spec'leri tek "HeroSignal" modülünde derlenir.
-#if canImport(HeroSignalCore)
-import HeroSignalCore
+import Pushizo
+// SPM: ayrı modül; CocoaPods alt spec'leri tek "Pushizo" modülünde derlenir.
+#if canImport(PushizoCore)
+import PushizoCore
 #endif
 import UIKit
 import UserNotifications
 
 /**
- React Native → iOS SDK köprüsünün Swift gövdesi. ObjC++ modülü (`HeroSignalRN.mm`) tüm çağrıları buraya iletir.
+ React Native → iOS SDK köprüsünün Swift gövdesi. ObjC++ modülü (`PushizoRN.mm`) tüm çağrıları buraya iletir.
 
  Yerel dinleyiciler süreç başına bir kez kaydedilir; olaylar o an bağlı olan modülün yayıcısına gönderilir. Bildirim
- tıklamaları JS'te `click` dinleyicisi eklenene kadar bekletilir (soğuk açılış). Info.plist'te `HeroSignalAppId` varsa SDK
+ tıklamaları JS'te `click` dinleyicisi eklenene kadar bekletilir (soğuk açılış). Info.plist'te `PushizoAppId` varsa SDK
  uygulama açılışında (JS yüklenmeden) başlatılır; böylece bildirim merkezi temsilcisi zamanında kurulur.
  */
-@objc(HeroSignalRNBridge)
-public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
-    @objc public static let shared = HeroSignalRNBridge()
+@objc(PushizoRNBridge)
+public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
+    @objc public static let shared = PushizoRNBridge()
 
-    @objc public static let eventClick = "HeroSignal-notificationClick"
-    @objc public static let eventForeground = "HeroSignal-notificationWillDisplay"
-    @objc public static let eventPermission = "HeroSignal-permissionChange"
-    @objc public static let eventSubscription = "HeroSignal-pushSubscriptionChange"
-    @objc public static let eventInAppClick = "HeroSignal-inAppClick"
-    @objc public static let eventInAppLifecycle = "HeroSignal-inAppLifecycle"
+    @objc public static let eventClick = "Pushizo-notificationClick"
+    @objc public static let eventForeground = "Pushizo-notificationWillDisplay"
+    @objc public static let eventPermission = "Pushizo-permissionChange"
+    @objc public static let eventSubscription = "Pushizo-pushSubscriptionChange"
+    @objc public static let eventInAppClick = "Pushizo-inAppClick"
+    @objc public static let eventInAppLifecycle = "Pushizo-inAppLifecycle"
 
     @objc public static var supportedEvents: [String] {
         [eventClick, eventForeground, eventPermission, eventSubscription, eventInAppClick, eventInAppLifecycle]
     }
 
     /// Info.plist anahtarları (Expo config plugin yazar; bare RN'de elle eklenebilir).
-    static let plistAppId = "HeroSignalAppId"
-    static let plistApiUrl = "HeroSignalApiUrl"
-    static let plistRequiresConsent = "HeroSignalRequiresPrivacyConsent"
-    static let plistLogLevel = "HeroSignalLogLevel"
+    static let plistAppId = "PushizoAppId"
+    static let plistApiUrl = "PushizoApiUrl"
+    static let plistRequiresConsent = "PushizoRequiresPrivacyConsent"
+    static let plistLogLevel = "PushizoLogLevel"
 
     /// Info.plist mantıksal değeri: `<true/>`/`<false/>` ya da elle yazılmış "YES"/"true"/"1" metinleri.
     static func plistBool(_ key: String) -> Bool? {
@@ -117,9 +117,9 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
 
     /// Yerel SDK'yı bir kez başlatır (aynı appId ile tekrar çağrı yok sayılır) ve köprü dinleyicilerini kurar.
     private func start(appId: String, options: [String: Any], launchOptions: [UIApplication.LaunchOptionsKey: Any]?) {
-        if initializedAppId != appId || !HeroSignal.isInitialized {
+        if initializedAppId != appId || !Pushizo.isInitialized {
             initializedAppId = appId
-            HeroSignal.initialize(appId, launchOptions: launchOptions) { o in
+            Pushizo.initialize(appId, launchOptions: launchOptions) { o in
                 if let apiUrl = options["apiUrl"] as? String, !apiUrl.isEmpty { o.apiUrl = apiUrl }
                 if let consent = options["requiresPrivacyConsent"] as? Bool { o.requiresPrivacyConsent = consent }
                 if let level = options["logLevel"] as? String { o.logLevel = Self.logLevel(level) }
@@ -135,7 +135,7 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
     private func registerListeners() {
         guard !listenersRegistered else { return }
         listenersRegistered = true
-        HeroSignal.Notifications.addClickListener { [weak self] e in
+        Pushizo.Notifications.addClickListener { [weak self] e in
             guard let self else { return }
             let payload: [String: Any] = ["notification": Self.map(e.notification), "actionId": e.actionId ?? NSNull(), "url": e.url ?? NSNull()]
             self.onMain {
@@ -149,7 +149,7 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
         }
         // Ön plan: JS dinleyicisi varsa gösterim ertelenir; JS displayNotification/preventDefault ile karar verir.
         // Yanıt gelmezse SDK 25 sn sonra bildirimi göstermeden kapatır (HSForegroundEvent.displayTimeout).
-        HeroSignal.Notifications.addForegroundLifecycleListener { [weak self] e in
+        Pushizo.Notifications.addForegroundLifecycleListener { [weak self] e in
             guard let self, self.foregroundHandlerEnabled, self.emitter != nil else { return }
             e.preventDefault()
             let id = UUID().uuidString
@@ -159,20 +159,20 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
                 DispatchQueue.main.asyncAfter(deadline: .now() + HSForegroundEvent.displayTimeout) { self.foregroundEvents.removeValue(forKey: id) }
             }
         }
-        HeroSignal.User.pushSubscription.addObserver { [weak self] s in
+        Pushizo.User.pushSubscription.addObserver { [weak self] s in
             self?.onMain { self?.onSubscriptionState(s) }
         }
-        HeroSignal.InAppMessages.addClickListener { [weak self] e in
+        Pushizo.InAppMessages.addClickListener { [weak self] e in
             self?.emit(Self.eventInAppClick, ["messageId": e.messageId, "actionId": e.actionId, "url": e.url ?? NSNull()])
         }
-        HeroSignal.InAppMessages.addLifecycleListener(self)
+        Pushizo.InAppMessages.addLifecycleListener(self)
         // Yerel SDK izin gözlemcisi: requestPermission sonrası ve uygulama yeniden etkinleştiğinde (izin Ayarlar'dan
         // değişmiş olabilir) etkin izin değiştiyse çağrılır.
-        HeroSignal.Notifications.addPermissionObserver { [weak self] granted in
+        Pushizo.Notifications.addPermissionObserver { [weak self] granted in
             self?.emit(Self.eventPermission, ["permission": granted])
         }
         Task { [weak self] in
-            let state = await HeroSignal.User.pushSubscription.state()
+            let state = await Pushizo.User.pushSubscription.state()
             self?.onMain {
                 guard let self else { return }
                 if self.lastState == nil { self.lastState = Self.map(state) }
@@ -189,19 +189,19 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
         }
     }
 
-    @objc public func setConsentGiven(_ given: Bool) { HeroSignal.setConsentGiven(given) }
+    @objc public func setConsentGiven(_ given: Bool) { Pushizo.setConsentGiven(given) }
 
     @objc public func login(_ externalId: String, identityHash: String?, jwt: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
-        guard HeroSignal.isInitialized else { reject("NOT_READY", "HeroSignal.initialize önce çağrılmalı", nil); return }
+        guard Pushizo.isInitialized else { reject("NOT_READY", "Pushizo.initialize önce çağrılmalı", nil); return }
         // Kanıt app kipine uymuyorsa Android köprüsündeki gibi reddedilir (yerel SDK yalnızca loglar).
-        if let message = HeroSignal.loginProofError(identityHash: identityHash, jwt: jwt) { reject("NOT_READY", message, nil); return }
-        HeroSignal.login(externalId, identityHash: identityHash, jwt: jwt)
+        if let message = Pushizo.loginProofError(identityHash: identityHash, jwt: jwt) { reject("NOT_READY", message, nil); return }
+        Pushizo.login(externalId, identityHash: identityHash, jwt: jwt)
         resolve(nil)
     }
 
     @objc public func updateUserJwt(_ jwt: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
         do {
-            try HeroSignal.updateUserJwt(jwt)
+            try Pushizo.updateUserJwt(jwt)
             resolve(nil)
         } catch HSError.invalidArgument(let message) {
             reject("INVALID_ARGUMENT", message, nil)
@@ -210,21 +210,21 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
         }
     }
 
-    @objc public func logout() { HeroSignal.logout() }
+    @objc public func logout() { Pushizo.logout() }
 
     // MARK: - Kullanıcı
 
     @objc public func addTags(_ tags: [String: Any], resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
-        HeroSignal.User.addTags(Self.stringMap(tags))
+        Pushizo.User.addTags(Self.stringMap(tags))
         resolve(nil)
     }
 
     @objc public func removeTags(_ keys: [Any], resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
-        HeroSignal.User.removeTags(keys.compactMap { $0 as? String })
+        Pushizo.User.removeTags(keys.compactMap { $0 as? String })
         resolve(nil)
     }
 
-    @objc public func getTags() -> [String: String] { HeroSignal.User.getTags() }
+    @objc public func getTags() -> [String: String] { Pushizo.User.getTags() }
 
     /// Alias kuralları yerel SDK ile aynı: geçersizse `INVALID_ARGUMENT` (yerel SDK yalnızca günlüğe yazar).
     @objc public func addAliases(_ aliases: [String: Any], resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
@@ -233,18 +233,18 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
             reject("INVALID_ARGUMENT", "Geçersiz alias: etiketler küçük harf/rakam/_ (en fazla 50), değer 1-255 karakter, en fazla 20 alias.", nil)
             return
         }
-        HeroSignal.User.addAliases(map)
+        Pushizo.User.addAliases(map)
         resolve(nil)
     }
 
     @objc public func removeAlias(_ label: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
         guard HSAliases.isValidLabel(label) else { reject("INVALID_ARGUMENT", "Geçersiz alias etiketi.", nil); return }
-        HeroSignal.User.removeAlias(label)
+        Pushizo.User.removeAlias(label)
         resolve(nil)
     }
 
     @objc public func setLanguage(_ code: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
-        HeroSignal.User.setLanguage(code)
+        Pushizo.User.setLanguage(code)
         resolve(nil)
     }
 
@@ -252,10 +252,10 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
         switch op {
         case "addEmail", "removeEmail":
             guard HSContacts.normalizeEmail(address) != nil else { reject("INVALID_ARGUMENT", "Geçersiz e-posta adresi.", nil); return }
-            if op == "addEmail" { HeroSignal.User.addEmail(address) } else { HeroSignal.User.removeEmail(address) }
+            if op == "addEmail" { Pushizo.User.addEmail(address) } else { Pushizo.User.removeEmail(address) }
         case "addSms", "removeSms":
             guard HSContacts.normalizePhone(address) != nil else { reject("INVALID_ARGUMENT", "Geçersiz telefon numarası (E.164 bekleniyor).", nil); return }
-            if op == "addSms" { HeroSignal.User.addSms(address) } else { HeroSignal.User.removeSms(address) }
+            if op == "addSms" { Pushizo.User.addSms(address) } else { Pushizo.User.removeSms(address) }
         default:
             reject("INVALID_ARGUMENT", "Bilinmeyen işlem: \(op)", nil)
             return
@@ -263,16 +263,16 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
         resolve(nil)
     }
 
-    @objc public func externalId() -> String? { HeroSignal.User.externalId }
-    @objc public func userId() -> String? { HeroSignal.User.id }
+    @objc public func externalId() -> String? { Pushizo.User.externalId }
+    @objc public func userId() -> String? { Pushizo.User.id }
     /// Bu cihazda kaydedilmiş e-posta adresleri ve SMS numaraları (yerel kayıt).
-    @objc public func emails() -> [String] { HeroSignal.User.emails }
-    @objc public func smsNumbers() -> [String] { HeroSignal.User.smsNumbers }
+    @objc public func emails() -> [String] { Pushizo.User.emails }
+    @objc public func smsNumbers() -> [String] { Pushizo.User.smsNumbers }
 
     // MARK: - Tercihler (ADR-0019 §4; abonelik yoksa NOT_READY, geçersiz girdi INVALID_ARGUMENT)
 
     @objc public func getPreferences(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
-        inbox(resolve, reject) { try await Self.map(HeroSignal.User.getPreferences()) }
+        inbox(resolve, reject) { try await Self.map(Pushizo.User.getPreferences()) }
     }
 
     /// Kurallar (1-100 kayıt, kategori 1-64, bilinen kanal) yerel SDK'da doğrulanır; tipi bozuk alan boş/varsayılan
@@ -281,48 +281,48 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
         let inputs = preferences.compactMap { $0 as? [String: Any] }.map {
             HSPreferenceInput(category: $0["category"] as? String ?? "", channel: $0["channel"] as? String, optedIn: $0["optedIn"] as? Bool ?? false)
         }
-        inbox(resolve, reject) { try await Self.map(HeroSignal.User.setPreferences(inputs)) }
+        inbox(resolve, reject) { try await Self.map(Pushizo.User.setPreferences(inputs)) }
     }
 
     // MARK: - Push aboneliği
 
     @objc public func getPushSubscriptionState(_ resolve: @escaping (Any?) -> Void) {
         Task {
-            let s = await HeroSignal.User.pushSubscription.state()
+            let s = await Pushizo.User.pushSubscription.state()
             DispatchQueue.main.async { resolve(Self.map(s)) }
         }
     }
 
-    @objc public func optIn() { HeroSignal.User.pushSubscription.optIn() }
-    @objc public func optOut() { HeroSignal.User.pushSubscription.optOut() }
+    @objc public func optIn() { Pushizo.User.pushSubscription.optIn() }
+    @objc public func optOut() { Pushizo.User.pushSubscription.optOut() }
 
     // MARK: - Bildirimler
 
     @objc public func getPermission(_ resolve: @escaping (Any?) -> Void) {
         Task {
-            let p = await HeroSignal.Notifications.permission()
+            let p = await Pushizo.Notifications.permission()
             DispatchQueue.main.async { resolve(Self.granted(p)) }
         }
     }
 
     @objc public func requestPermission(_ resolve: @escaping (Any?) -> Void) {
-        HeroSignal.Notifications.requestPermission { granted in DispatchQueue.main.async { resolve(granted) } }
+        Pushizo.Notifications.requestPermission { granted in DispatchQueue.main.async { resolve(granted) } }
     }
 
-    @objc public func clearAll() { HeroSignal.Notifications.clearAll() }
+    @objc public func clearAll() { Pushizo.Notifications.clearAll() }
 
     /// Tek bildirimi istek kimliğiyle (`UNNotificationRequest.identifier`) bildirim merkezinden kaldırır.
     @objc public func removeNotification(_ identifier: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
         let trimmed = identifier.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { reject("INVALID_ARGUMENT", "identifier gerekli", nil); return }
-        HeroSignal.Notifications.removeNotification(identifier: trimmed)
+        Pushizo.Notifications.removeNotification(identifier: trimmed)
         resolve(nil)
     }
 
     /// Aynı `thread-id`'ye sahip bildirimleri bildirim merkezinden kaldırır.
     @objc public func removeGroupedNotifications(_ group: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
         guard !group.trimmingCharacters(in: .whitespaces).isEmpty else { reject("INVALID_ARGUMENT", "group gerekli", nil); return }
-        HeroSignal.Notifications.removeGroupedNotifications(group)
+        Pushizo.Notifications.removeGroupedNotifications(group)
         resolve(nil)
     }
 
@@ -337,7 +337,7 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
     // MARK: - Oturum
 
     @objc public func sendEvent(_ name: String, properties: [String: Any], value: NSNumber?) {
-        HeroSignal.Session.sendEvent(name, properties: properties, value: value?.doubleValue)
+        Pushizo.Session.sendEvent(name, properties: properties, value: value?.doubleValue)
     }
 
     // MARK: - In-app
@@ -349,25 +349,25 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
             return
         }
         onMain {
-            HeroSignal.InAppMessages.addTriggers(map)
+            Pushizo.InAppMessages.addTriggers(map)
             resolve(nil)
         }
     }
 
     @objc public func removeTriggers(_ keys: [Any]) {
         let list = keys.compactMap { $0 as? String }
-        onMain { HeroSignal.InAppMessages.removeTriggers(list) }
+        onMain { Pushizo.InAppMessages.removeTriggers(list) }
     }
 
-    @objc public func clearTriggers() { onMain { HeroSignal.InAppMessages.clearTriggers() } }
+    @objc public func clearTriggers() { onMain { Pushizo.InAppMessages.clearTriggers() } }
 
-    @objc public func getTriggers(_ resolve: @escaping (Any?) -> Void) { onMain { resolve(HeroSignal.InAppMessages.getTriggers()) } }
+    @objc public func getTriggers(_ resolve: @escaping (Any?) -> Void) { onMain { resolve(Pushizo.InAppMessages.getTriggers()) } }
 
-    @objc public func setScreen(_ name: String?) { onMain { HeroSignal.InAppMessages.setScreen(name) } }
+    @objc public func setScreen(_ name: String?) { onMain { Pushizo.InAppMessages.setScreen(name) } }
 
-    @objc public func setInAppPaused(_ paused: Bool) { onMain { HeroSignal.InAppMessages.paused = paused } }
+    @objc public func setInAppPaused(_ paused: Bool) { onMain { Pushizo.InAppMessages.paused = paused } }
 
-    @objc public func getInAppPaused(_ resolve: @escaping (Any?) -> Void) { onMain { resolve(HeroSignal.InAppMessages.paused) } }
+    @objc public func getInAppPaused(_ resolve: @escaping (Any?) -> Void) { onMain { resolve(Pushizo.InAppMessages.paused) } }
 
     public func onWillDisplay(_ message: HSInAppMessage) { emitLifecycle("willDisplay", message) }
     public func onDidDisplay(_ message: HSInAppMessage) { emitLifecycle("didDisplay", message) }
@@ -381,26 +381,26 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
     // MARK: - Bildirim kutusu
 
     @objc public func inboxList(_ limit: Double, cursor: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
-        inbox(resolve, reject) { try await Self.map(HeroSignal.Inbox.list(limit: Int(limit), cursor: cursor)) }
+        inbox(resolve, reject) { try await Self.map(Pushizo.Inbox.list(limit: Int(limit), cursor: cursor)) }
     }
 
     @objc public func inboxMarkRead(_ id: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
-        inbox(resolve, reject) { try await Self.map(HeroSignal.Inbox.markRead(id)) }
+        inbox(resolve, reject) { try await Self.map(Pushizo.Inbox.markRead(id)) }
     }
 
     @objc public func inboxMarkAllRead(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
-        inbox(resolve, reject) { try await HeroSignal.Inbox.markAllRead() }
+        inbox(resolve, reject) { try await Pushizo.Inbox.markAllRead() }
     }
 
     @objc public func inboxArchive(_ id: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
         inbox(resolve, reject) {
-            try await HeroSignal.Inbox.archive(id)
+            try await Pushizo.Inbox.archive(id)
             return nil
         }
     }
 
     @objc public func inboxUnreadCount(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
-        inbox(resolve, reject) { try await HeroSignal.Inbox.unreadCount() }
+        inbox(resolve, reject) { try await Pushizo.Inbox.unreadCount() }
     }
 
     /// Asenkron yerel çağrı (bildirim kutusu, tercihler). Hata kodları: sunucu `HSApiError.code`, kullanım hataları
@@ -428,16 +428,16 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
 
     // MARK: - Live Activities (ADR-0024; iOS 16.1+)
 
-    /// Genel `HeroSignalDefaultLiveActivityAttributes` türünü izlemeye alır.
+    /// Genel `PushizoDefaultLiveActivityAttributes` türünü izlemeye alır.
     @objc public func setupDefaultLiveActivity(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
-        liveActivity(resolve, reject) { try HeroSignal.LiveActivities.setupDefaultLiveActivity() }
+        liveActivity(resolve, reject) { try Pushizo.LiveActivities.setupDefaultLiveActivity() }
     }
 
     /// Genel türle yerel etkinlik başlatır; değer ve anahtar kuralları yerel SDK'da da denetlenir (`INVALID_ARGUMENT`).
     @objc public func startDefaultLiveActivity(_ activityId: String, attributes: [String: Any], contentState: [String: Any], resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
         guard !activityId.trimmingCharacters(in: .whitespaces).isEmpty else { reject("INVALID_ARGUMENT", "activityId gerekli", nil); return }
         liveActivity(resolve, reject) {
-            try HeroSignal.LiveActivities.startDefaultLiveActivity(activityId: activityId, attributes: attributes, contentState: contentState)
+            try Pushizo.LiveActivities.startDefaultLiveActivity(activityId: activityId, attributes: attributes, contentState: contentState)
         }
     }
 
@@ -458,24 +458,24 @@ public final class HeroSignalRNBridge: NSObject, HSInAppLifecycleListener {
     // MARK: - Konum (v2 Faz 17b; yalnızca ön plan, arka plan konumu yok)
 
     /// Paylaşım tercihi kalıcıdır; kapatınca yerel SDK sunucuya `location: null` gönderir (konum ve rıza kaydı silinir).
-    @objc public func setLocationShared(_ shared: Bool) { HeroSignal.Location.setShared(shared) }
+    @objc public func setLocationShared(_ shared: Bool) { Pushizo.Location.setShared(shared) }
 
-    @objc public func isLocationShared(_ resolve: @escaping (Any?) -> Void) { resolve(HeroSignal.Location.isShared) }
+    @objc public func isLocationShared(_ resolve: @escaping (Any?) -> Void) { resolve(Pushizo.Location.isShared) }
 
     /// Açıklama uyarısı (boş metin → SDK'nın tr/en varsayılanı) ve "kullanırken" izni; sonuç yerel SDK'dan ana iş parçacığında gelir.
     @objc public func requestLocationPermission(_ rationale: String?, resolve: @escaping (Any?) -> Void) {
         let text = rationale.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
-        HeroSignal.Location.requestPermission(rationale: text) { granted in resolve(granted) }
+        Pushizo.Location.requestPermission(rationale: text) { granted in resolve(granted) }
     }
 
     // MARK: - Hata ayıklama
 
-    @objc public func setLogLevel(_ level: String) { HeroSignal.Debug.setLogLevel(Self.logLevel(level)) }
+    @objc public func setLogLevel(_ level: String) { Pushizo.Debug.setLogLevel(Self.logLevel(level)) }
 
-    // MARK: - APNs token (AppDelegate'ten; bkz. HeroSignalRNPush.h)
+    // MARK: - APNs token (AppDelegate'ten; bkz. PushizoRNPush.h)
 
-    @objc public static func didRegisterForRemoteNotifications(deviceToken: Data) { HeroSignal.setDeviceToken(deviceToken) }
-    @objc public static func didFailToRegisterForRemoteNotifications(error: Error) { HeroSignal.setDeviceTokenError(error) }
+    @objc public static func didRegisterForRemoteNotifications(deviceToken: Data) { Pushizo.setDeviceToken(deviceToken) }
+    @objc public static func didFailToRegisterForRemoteNotifications(error: Error) { Pushizo.setDeviceTokenError(error) }
 
     // MARK: - Yardımcılar
 

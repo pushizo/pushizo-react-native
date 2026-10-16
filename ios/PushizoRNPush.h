@@ -1,10 +1,10 @@
-// APNs token'ını HeroSignal'e iletmek için AppDelegate yardımcıları (Objective-C AppDelegate'ler için).
-// Swift AppDelegate'te doğrudan `import HeroSignal` ve `HeroSignal.setDeviceToken(deviceToken)` kullanılabilir.
+// APNs token'ını Pushizo'ya iletmek için AppDelegate yardımcıları (Objective-C AppDelegate'ler için).
+// Swift AppDelegate'te doğrudan `import Pushizo` ve `Pushizo.setDeviceToken(deviceToken)` kullanılabilir.
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface HeroSignalRNPush : NSObject
+@interface PushizoRNPush : NSObject
 
 /// `application:didRegisterForRemoteNotificationsWithDeviceToken:` içinden çağrılır.
 + (void)didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken;

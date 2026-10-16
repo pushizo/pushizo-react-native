@@ -1,16 +1,16 @@
-package com.herosignal.reactnative
+package com.pushizo.reactnative
 
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import com.herosignal.sdk.HeroSignal
-import com.herosignal.sdk.HsClickEvent
-import com.herosignal.sdk.HsForegroundEvent
-import com.herosignal.sdk.HsInAppClickEvent
-import com.herosignal.sdk.HsInAppLifecycleEvent
-import com.herosignal.sdk.HsInAppLifecycleListener
-import com.herosignal.sdk.HsLog
-import com.herosignal.sdk.HsPushSubscriptionState
+import com.pushizo.sdk.Pushizo
+import com.pushizo.sdk.HsClickEvent
+import com.pushizo.sdk.HsForegroundEvent
+import com.pushizo.sdk.HsInAppClickEvent
+import com.pushizo.sdk.HsInAppLifecycleEvent
+import com.pushizo.sdk.HsInAppLifecycleListener
+import com.pushizo.sdk.HsLog
+import com.pushizo.sdk.HsPushSubscriptionState
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -20,13 +20,13 @@ import java.util.concurrent.ConcurrentHashMap
  * React bağlamı (ve modül örneği) yeniden yüklemelerde değişebilir; dinleyiciler burada bir kez kaydedilir, olaylar o an
  * bağlı olan [Sink]'e gönderilir. Bildirim tıklamaları JS'te `click` dinleyicisi eklenene kadar bekletilir (soğuk açılış).
  */
-object HeroSignalBridge {
-    const val EVENT_CLICK = "HeroSignal-notificationClick"
-    const val EVENT_FOREGROUND = "HeroSignal-notificationWillDisplay"
-    const val EVENT_PERMISSION = "HeroSignal-permissionChange"
-    const val EVENT_SUBSCRIPTION = "HeroSignal-pushSubscriptionChange"
-    const val EVENT_IN_APP_CLICK = "HeroSignal-inAppClick"
-    const val EVENT_IN_APP_LIFECYCLE = "HeroSignal-inAppLifecycle"
+object PushizoBridge {
+    const val EVENT_CLICK = "Pushizo-notificationClick"
+    const val EVENT_FOREGROUND = "Pushizo-notificationWillDisplay"
+    const val EVENT_PERMISSION = "Pushizo-permissionChange"
+    const val EVENT_SUBSCRIPTION = "Pushizo-pushSubscriptionChange"
+    const val EVENT_IN_APP_CLICK = "Pushizo-inAppClick"
+    const val EVENT_IN_APP_LIFECYCLE = "Pushizo-inAppLifecycle"
 
     /** iOS ile aynı: ertelenmiş ön plan kararı için bekleme süresi. */
     private const val FOREGROUND_TIMEOUT_MS = 25_000L
@@ -53,10 +53,10 @@ object HeroSignalBridge {
 
     /**
      * Yerel SDK'yı başlatır (aynı appId ile tekrar çağrı yerel SDK'da yok sayılır) ve köprü dinleyicilerini kaydeder.
-     * Hem JS `initialize` hem de manifest tabanlı erken başlatma ([HeroSignalInitProvider]) bu yolu kullanır.
+     * Hem JS `initialize` hem de manifest tabanlı erken başlatma ([PushizoInitProvider]) bu yolu kullanır.
      */
-    fun initialize(context: Context, appId: String, options: HeroSignal.Options) {
-        HeroSignal.initialize(context.applicationContext, appId, options)
+    fun initialize(context: Context, appId: String, options: Pushizo.Options) {
+        Pushizo.initialize(context.applicationContext, appId, options)
         registerListeners()
     }
 
@@ -65,13 +65,13 @@ object HeroSignalBridge {
             if (listenersRegistered) return
             listenersRegistered = true
         }
-        HeroSignal.Notifications.addClickListener(clickListener)
-        HeroSignal.Notifications.addForegroundLifecycleListener(foregroundListener)
-        HeroSignal.User.pushSubscription.addObserver(subscriptionObserver)
-        HeroSignal.Notifications.addPermissionObserver(permissionObserver)
-        HeroSignal.InAppMessages.addClickListener(inAppClickListener)
-        HeroSignal.InAppMessages.addLifecycleListener(inAppLifecycleListener)
-        val state = HeroSignal.User.pushSubscription.state
+        Pushizo.Notifications.addClickListener(clickListener)
+        Pushizo.Notifications.addForegroundLifecycleListener(foregroundListener)
+        Pushizo.User.pushSubscription.addObserver(subscriptionObserver)
+        Pushizo.Notifications.addPermissionObserver(permissionObserver)
+        Pushizo.InAppMessages.addClickListener(inAppClickListener)
+        Pushizo.InAppMessages.addLifecycleListener(inAppLifecycleListener)
+        val state = Pushizo.User.pushSubscription.state
         synchronized(lock) { lastState = state.toMap() }
     }
 

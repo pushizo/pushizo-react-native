@@ -8,9 +8,9 @@ export const LogLevel = {
 } as const;
 export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
 
-/** `HeroSignal.initialize` seçenekleri. */
+/** `Pushizo.initialize` seçenekleri. */
 export interface InitializeOptions {
-  /** HeroSignal API adresi (kendi barındırma için). Varsayılan `https://api.herosignal.dev`. */
+  /** Pushizo API adresi (kendi barındırma için). Varsayılan `https://api.pushizo.com`. */
   apiUrl?: string;
   /** KVKK/GDPR: true ise `setConsentGiven(true)` çağrılana kadar hiçbir ağ çağrısı yapılmaz. */
   requiresPrivacyConsent?: boolean;
@@ -29,7 +29,7 @@ export interface InitializeOptions {
 }
 
 /**
- * `HeroSignal.login` kimlik kanıtı (ADR-0023 §9). App'in `identity_verification_mode` ayarına göre HMAC
+ * `Pushizo.login` kimlik kanıtı (ADR-0023 §9). App'in `identity_verification_mode` ayarına göre HMAC
  * `identityHash` ve/veya sunucunuzda imzalanmış ES256 `jwt` (`sub` = externalId, `aud` = appId) verilir.
  */
 export interface LoginOptions {
@@ -39,7 +39,7 @@ export interface LoginOptions {
 }
 
 /**
- * iOS Live Activity alan değeri (`HeroSignalDefaultLiveActivityAttributes.data` / `ContentState.data`): metin, sonlu
+ * iOS Live Activity alan değeri (`PushizoDefaultLiveActivityAttributes.data` / `ContentState.data`): metin, sonlu
  * sayı veya mantıksal değer.
  */
 export type LiveActivityValue = string | number | boolean;
@@ -180,11 +180,11 @@ export interface PreferenceInput {
 
 /** Yerel olay adları (NativeEventEmitter). Yerel köprülerdeki sabitlerle aynı olmalıdır. */
 export const NativeEvents = {
-  Click: 'HeroSignal-notificationClick',
-  ForegroundWillDisplay: 'HeroSignal-notificationWillDisplay',
-  PermissionChange: 'HeroSignal-permissionChange',
-  PushSubscriptionChange: 'HeroSignal-pushSubscriptionChange',
-  InAppClick: 'HeroSignal-inAppClick',
-  InAppLifecycle: 'HeroSignal-inAppLifecycle',
+  Click: 'Pushizo-notificationClick',
+  ForegroundWillDisplay: 'Pushizo-notificationWillDisplay',
+  PermissionChange: 'Pushizo-permissionChange',
+  PushSubscriptionChange: 'Pushizo-pushSubscriptionChange',
+  InAppClick: 'Pushizo-inAppClick',
+  InAppLifecycle: 'Pushizo-inAppLifecycle',
 } as const;
 export type NativeEventName = (typeof NativeEvents)[keyof typeof NativeEvents];

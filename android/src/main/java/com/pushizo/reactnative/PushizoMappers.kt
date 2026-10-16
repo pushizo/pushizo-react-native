@@ -1,18 +1,18 @@
-package com.herosignal.reactnative
+package com.pushizo.reactnative
 
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.ReadableType
-import com.herosignal.sdk.HeroSignal
-import com.herosignal.sdk.HsInboxItem
-import com.herosignal.sdk.HsInboxPage
-import com.herosignal.sdk.HsLog
-import com.herosignal.sdk.HsMessageCategory
-import com.herosignal.sdk.HsNotification
-import com.herosignal.sdk.HsPreference
-import com.herosignal.sdk.HsPreferenceInput
-import com.herosignal.sdk.HsPreferencesResult
-import com.herosignal.sdk.HsPushSubscriptionState
+import com.pushizo.sdk.Pushizo
+import com.pushizo.sdk.HsInboxItem
+import com.pushizo.sdk.HsInboxPage
+import com.pushizo.sdk.HsLog
+import com.pushizo.sdk.HsMessageCategory
+import com.pushizo.sdk.HsNotification
+import com.pushizo.sdk.HsPreference
+import com.pushizo.sdk.HsPreferenceInput
+import com.pushizo.sdk.HsPreferencesResult
+import com.pushizo.sdk.HsPushSubscriptionState
 
 /** Yerel SDK modellerinin JS'e gidecek haritaları (alan adları TS `types.ts` ile aynıdır). */
 internal fun HsNotification.toMap(): Map<String, Any?> = mapOf(
@@ -104,12 +104,12 @@ internal fun logLevel(name: String?): HsLog.Level = when (name) {
     else -> HsLog.Level.WARN
 }
 
-/** JS `initialize` seçenekleri → yerel `HeroSignal.Options` (verilmeyenler yerel varsayılanı korur). */
-internal fun ReadableMap.toOptions(): HeroSignal.Options {
-    val defaults = HeroSignal.Options()
+/** JS `initialize` seçenekleri → yerel `Pushizo.Options` (verilmeyenler yerel varsayılanı korur). */
+internal fun ReadableMap.toOptions(): Pushizo.Options {
+    val defaults = Pushizo.Options()
     fun str(key: String): String? = if (hasKey(key) && getType(key) == ReadableType.String) getString(key) else null
     fun bool(key: String): Boolean? = if (hasKey(key) && getType(key) == ReadableType.Boolean) getBoolean(key) else null
-    return HeroSignal.Options(
+    return Pushizo.Options(
         apiUrl = str("apiUrl") ?: defaults.apiUrl,
         requiresPrivacyConsent = bool("requiresPrivacyConsent") ?: defaults.requiresPrivacyConsent,
         logLevel = str("logLevel")?.let { logLevel(it) } ?: defaults.logLevel,

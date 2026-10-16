@@ -1,4 +1,4 @@
-package com.herosignal.reactnative
+package com.pushizo.reactnative
 
 import android.Manifest
 import android.app.AlertDialog
@@ -12,27 +12,27 @@ import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.UiThreadUtil
 import com.facebook.react.modules.core.PermissionAwareActivity
 import com.facebook.react.modules.core.PermissionListener
-import com.herosignal.sdk.HeroSignal
-import com.herosignal.sdk.HsApiException
-import com.herosignal.sdk.HsCallback
-import com.herosignal.sdk.HsLog
-import com.herosignal.sdk.R
+import com.pushizo.sdk.Pushizo
+import com.pushizo.sdk.HsApiException
+import com.pushizo.sdk.HsCallback
+import com.pushizo.sdk.HsLog
+import com.pushizo.sdk.R
 
 /**
- * Yeni (TurboModule) ve eski mimari modüllerinin ortak gövdesi: JS çağrılarını Android SDK'ya (`com.herosignal.sdk`)
+ * Yeni (TurboModule) ve eski mimari modüllerinin ortak gövdesi: JS çağrılarını Android SDK'ya (`com.pushizo.sdk`)
  * iletir. Doğrulama hataları `INVALID_ARGUMENT`, başlatılmamış SDK `NOT_READY`, API hataları sunucu hata koduyla reddedilir.
  */
-class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
-    private val sink = HeroSignalBridge.Sink { event, payload ->
+class PushizoModuleImpl(private val context: ReactApplicationContext) {
+    private val sink = PushizoBridge.Sink { event, payload ->
         if (context.hasActiveReactInstance()) context.emitDeviceEvent(event, Arguments.makeNativeMap(payload))
     }
 
     init {
-        HeroSignalBridge.attach(sink)
+        PushizoBridge.attach(sink)
     }
 
     fun invalidate() {
-        HeroSignalBridge.detach(sink)
+        PushizoBridge.detach(sink)
     }
 
     // --- Başlatma ve gizlilik ---
@@ -46,114 +46,114 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
         val resolved = options.toOptions()
         UiThreadUtil.runOnUiThread {
             guard(promise) {
-                HeroSignalBridge.initialize(context, appId, resolved)
+                PushizoBridge.initialize(context, appId, resolved)
                 promise.resolve(null)
             }
         }
     }
 
-    fun setConsentGiven(given: Boolean) = HeroSignal.setConsentGiven(given)
+    fun setConsentGiven(given: Boolean) = Pushizo.setConsentGiven(given)
 
     fun login(externalId: String, identityHash: String?, jwt: String?, promise: Promise) = guard(promise) {
-        HeroSignal.login(externalId, identityHash, jwt)
+        Pushizo.login(externalId, identityHash, jwt)
         promise.resolve(null)
     }
 
     fun updateUserJwt(jwt: String, promise: Promise) = guard(promise) {
-        HeroSignal.updateUserJwt(jwt)
+        Pushizo.updateUserJwt(jwt)
         promise.resolve(null)
     }
 
-    fun logout() = HeroSignal.logout()
+    fun logout() = Pushizo.logout()
 
     // --- Kullanıcı ---
 
     fun addTags(tags: ReadableMap, promise: Promise) = guard(promise) {
-        HeroSignal.User.addTags(tags.toStringMap())
+        Pushizo.User.addTags(tags.toStringMap())
         promise.resolve(null)
     }
 
     fun removeTags(keys: ReadableArray, promise: Promise) = guard(promise) {
-        HeroSignal.User.removeTags(keys.toStringList())
+        Pushizo.User.removeTags(keys.toStringList())
         promise.resolve(null)
     }
 
-    fun getTags(promise: Promise) = guard(promise) { promise.resolve(Arguments.makeNativeMap(HeroSignal.User.getTags())) }
+    fun getTags(promise: Promise) = guard(promise) { promise.resolve(Arguments.makeNativeMap(Pushizo.User.getTags())) }
 
     fun addAliases(aliases: ReadableMap, promise: Promise) = guard(promise) {
-        HeroSignal.User.addAliases(aliases.toStringMap())
+        Pushizo.User.addAliases(aliases.toStringMap())
         promise.resolve(null)
     }
 
     fun removeAlias(label: String, promise: Promise) = guard(promise) {
-        HeroSignal.User.removeAlias(label)
+        Pushizo.User.removeAlias(label)
         promise.resolve(null)
     }
 
     fun setLanguage(code: String, promise: Promise) = guard(promise) {
-        HeroSignal.User.setLanguage(code)
+        Pushizo.User.setLanguage(code)
         promise.resolve(null)
     }
 
     fun addEmail(email: String, promise: Promise) = guard(promise) {
-        HeroSignal.User.addEmail(email)
+        Pushizo.User.addEmail(email)
         promise.resolve(null)
     }
 
     fun removeEmail(email: String, promise: Promise) = guard(promise) {
-        HeroSignal.User.removeEmail(email)
+        Pushizo.User.removeEmail(email)
         promise.resolve(null)
     }
 
     fun addSms(phoneNumber: String, promise: Promise) = guard(promise) {
-        HeroSignal.User.addSms(phoneNumber)
+        Pushizo.User.addSms(phoneNumber)
         promise.resolve(null)
     }
 
     fun removeSms(phoneNumber: String, promise: Promise) = guard(promise) {
-        HeroSignal.User.removeSms(phoneNumber)
+        Pushizo.User.removeSms(phoneNumber)
         promise.resolve(null)
     }
 
     /** Bu cihazda kaydedilmiş e-posta adresleri (yerel kayıt). */
-    fun getEmails(promise: Promise) = guard(promise) { promise.resolve(Arguments.makeNativeArray(HeroSignal.User.emails)) }
+    fun getEmails(promise: Promise) = guard(promise) { promise.resolve(Arguments.makeNativeArray(Pushizo.User.emails)) }
 
     /** Bu cihazda kaydedilmiş SMS numaraları (E.164, yerel kayıt). */
-    fun getSmsNumbers(promise: Promise) = guard(promise) { promise.resolve(Arguments.makeNativeArray(HeroSignal.User.smsNumbers)) }
+    fun getSmsNumbers(promise: Promise) = guard(promise) { promise.resolve(Arguments.makeNativeArray(Pushizo.User.smsNumbers)) }
 
-    fun getExternalId(promise: Promise) = promise.resolve(HeroSignal.User.externalId)
+    fun getExternalId(promise: Promise) = promise.resolve(Pushizo.User.externalId)
 
-    fun getUserId(promise: Promise) = promise.resolve(HeroSignal.User.id)
+    fun getUserId(promise: Promise) = promise.resolve(Pushizo.User.id)
 
     // --- Tercihler (ADR-0019 §4; abonelik yoksa NOT_READY, geçersiz girdi INVALID_ARGUMENT) ---
 
     fun getPreferences(promise: Promise) =
-        HeroSignal.User.getPreferences(reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+        Pushizo.User.getPreferences(reply(promise) { Arguments.makeNativeMap(it.toMap()) })
 
     fun setPreferences(preferences: ReadableArray, promise: Promise) =
-        HeroSignal.User.setPreferences(preferences.toPreferenceInputs(), reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+        Pushizo.User.setPreferences(preferences.toPreferenceInputs(), reply(promise) { Arguments.makeNativeMap(it.toMap()) })
 
     // --- Push aboneliği ---
 
     fun getPushSubscriptionState(promise: Promise) =
-        promise.resolve(Arguments.makeNativeMap(HeroSignal.User.pushSubscription.state.toMap()))
+        promise.resolve(Arguments.makeNativeMap(Pushizo.User.pushSubscription.state.toMap()))
 
-    fun optIn() = HeroSignal.User.pushSubscription.optIn()
+    fun optIn() = Pushizo.User.pushSubscription.optIn()
 
-    fun optOut() = HeroSignal.User.pushSubscription.optOut()
+    fun optOut() = Pushizo.User.pushSubscription.optOut()
 
     // --- Bildirimler ---
 
-    fun getPermission(promise: Promise) = promise.resolve(HeroSignal.Notifications.permission)
+    fun getPermission(promise: Promise) = promise.resolve(Pushizo.Notifications.permission)
 
     /**
      * Android 13+ POST_NOTIFICATIONS izni React Native'in [PermissionAwareActivity] akışıyla istenir (sonuç
-     * `ReactActivity` üzerinden bu dinleyiciye gelir), ardından SDK'ya [HeroSignal.Notifications.onPermissionResult]
+     * `ReactActivity` üzerinden bu dinleyiciye gelir), ardından SDK'ya [Pushizo.Notifications.onPermissionResult]
      * bildirilir. Önceki sürümlerde izin çalışma zamanında istenemez; mevcut durum döner.
      */
     fun requestPermission(promise: Promise) {
-        if (HeroSignal.Notifications.permission || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            promise.resolve(HeroSignal.Notifications.permission)
+        if (Pushizo.Notifications.permission || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            promise.resolve(Pushizo.Notifications.permission)
             return
         }
         val activity = context.currentActivity as? PermissionAwareActivity
@@ -162,79 +162,79 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
             return
         }
         val listener = PermissionListener { requestCode, _, _ ->
-            if (requestCode != HeroSignal.Notifications.PERMISSION_REQUEST_CODE) return@PermissionListener false
+            if (requestCode != Pushizo.Notifications.PERMISSION_REQUEST_CODE) return@PermissionListener false
             // İzin değiştiyse yerel SDK izin gözlemcisi `permissionChange` olayını gönderir.
-            HeroSignal.Notifications.onPermissionResult()
-            promise.resolve(HeroSignal.Notifications.permission)
+            Pushizo.Notifications.onPermissionResult()
+            promise.resolve(Pushizo.Notifications.permission)
             true
         }
         UiThreadUtil.runOnUiThread {
-            activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), HeroSignal.Notifications.PERMISSION_REQUEST_CODE, listener)
+            activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), Pushizo.Notifications.PERMISSION_REQUEST_CODE, listener)
         }
     }
 
-    fun clearAll() = HeroSignal.Notifications.clearAll()
+    fun clearAll() = Pushizo.Notifications.clearAll()
 
     /** Tek bildirimi `androidNotificationId` ile kaldırır; JS kimliği metin olarak iletir, Android'de tamsayı olmalıdır. */
     fun removeNotification(id: String, promise: Promise) = guard(promise) {
         val androidNotificationId = requireNotNull(id.trim().toIntOrNull()) { "Android bildirim kimliği tamsayı olmalı: $id" }
-        HeroSignal.Notifications.removeNotification(androidNotificationId)
+        Pushizo.Notifications.removeNotification(androidNotificationId)
         promise.resolve(null)
     }
 
     /** Aynı grup anahtarına (`android_group`) sahip bildirimleri ve grup özetini kaldırır. */
     fun removeGroupedNotifications(group: String, promise: Promise) = guard(promise) {
-        HeroSignal.Notifications.removeGroupedNotifications(group)
+        Pushizo.Notifications.removeGroupedNotifications(group)
         promise.resolve(null)
     }
 
     fun setForegroundHandlerEnabled(enabled: Boolean) {
-        HeroSignalBridge.foregroundHandlerEnabled = enabled
+        PushizoBridge.foregroundHandlerEnabled = enabled
     }
 
-    fun displayNotification(notificationId: String) = HeroSignalBridge.displayNotification(notificationId)
+    fun displayNotification(notificationId: String) = PushizoBridge.displayNotification(notificationId)
 
-    fun preventDefault(notificationId: String) = HeroSignalBridge.preventDefault(notificationId)
+    fun preventDefault(notificationId: String) = PushizoBridge.preventDefault(notificationId)
 
     // --- Oturum ---
 
     fun sendEvent(name: String, properties: ReadableMap, value: Double?) =
-        HeroSignal.Session.sendEvent(name, properties.toHashMap(), value)
+        Pushizo.Session.sendEvent(name, properties.toHashMap(), value)
 
     // --- In-app ---
 
     fun addTriggers(triggers: ReadableMap, promise: Promise) = guard(promise) {
-        HeroSignal.InAppMessages.addTriggers(triggers.toStringMap())
+        Pushizo.InAppMessages.addTriggers(triggers.toStringMap())
         promise.resolve(null)
     }
 
-    fun removeTriggers(keys: ReadableArray) = HeroSignal.InAppMessages.removeTriggers(keys.toStringList())
+    fun removeTriggers(keys: ReadableArray) = Pushizo.InAppMessages.removeTriggers(keys.toStringList())
 
-    fun clearTriggers() = HeroSignal.InAppMessages.clearTriggers()
+    fun clearTriggers() = Pushizo.InAppMessages.clearTriggers()
 
-    fun getTriggers(promise: Promise) = promise.resolve(Arguments.makeNativeMap(HeroSignal.InAppMessages.getTriggers()))
+    fun getTriggers(promise: Promise) = promise.resolve(Arguments.makeNativeMap(Pushizo.InAppMessages.getTriggers()))
 
-    fun setScreen(name: String?) = HeroSignal.InAppMessages.setScreen(name)
+    fun setScreen(name: String?) = Pushizo.InAppMessages.setScreen(name)
 
     fun setInAppPaused(paused: Boolean) {
-        HeroSignal.InAppMessages.paused = paused
+        Pushizo.InAppMessages.paused = paused
     }
 
-    fun getInAppPaused(promise: Promise) = promise.resolve(HeroSignal.InAppMessages.paused)
+    fun getInAppPaused(promise: Promise) = promise.resolve(Pushizo.InAppMessages.paused)
 
     // --- Bildirim kutusu (SDK geri çağrıları arka plan iş parçacığındadır; Promise iş parçacığından bağımsızdır) ---
 
     fun inboxList(limit: Double, cursor: String?, promise: Promise) =
-        HeroSignal.Inbox.list(limit.toInt(), cursor, reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+        Pushizo.Inbox.list(limit.toInt(), cursor, reply(promise) { Arguments.makeNativeMap(it.toMap()) })
 
     fun inboxMarkRead(id: String, promise: Promise) =
-        HeroSignal.Inbox.markRead(id, reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+        Pushizo.Inbox.markRead(id, reply(promise) { Arguments.makeNativeMap(it.toMap()) })
 
-    fun inboxMarkAllRead(promise: Promise) = HeroSignal.Inbox.markAllRead(reply(promise) { it })
+    fun inboxMarkAllRead(promise: Promise) = Pushizo.Inbox.markAllRead(reply(promise) { it })
 
-    fun inboxArchive(id: String, promise: Promise) = HeroSignal.Inbox.archive(id, reply(promise) { null })
+    fun inboxArchive(id: String, promise: Promise) = Pushizo.Inbox.archive(id, reply(promise) { null })
 
-    fun inboxUnreadCount(promise: Promise) = HeroSignal.Inbox.unreadCount(reply(promise) { it })
+    fun inboxUnreadCount(promise: Promise) = Pushizo.Inbox.unreadCount(reply(promise) { it })
 
     // --- Live Activities: iOS (ActivityKit) özelliğidir; Android'de sessizce yok sayılmaz, açık hatayla reddedilir ---
 
@@ -248,19 +248,19 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
 
     // --- Konum (v2 Faz 17b; yalnızca ön plan, arka plan konumu yok) ---
 
-    fun setLocationShared(shared: Boolean) = HeroSignal.Location.setShared(shared)
+    fun setLocationShared(shared: Boolean) = Pushizo.Location.setShared(shared)
 
-    fun isLocationShared(promise: Promise) = promise.resolve(HeroSignal.Location.isShared)
+    fun isLocationShared(promise: Promise) = promise.resolve(Pushizo.Location.isShared)
 
     /**
      * Yerel SDK'nın `Location.requestPermission(activity)` çağrısı sonucu bildirmediğinden akış köprüde yürütülür:
      * açıklama diyaloğu (SDK string kaynakları), ardından React Native'in [PermissionAwareActivity] akışıyla sistem izni
-     * ([HeroSignal.Location.PERMISSION_REQUEST_CODE]); sonuçta SDK'ya [HeroSignal.Location.onPermissionResult] bildirilir.
+     * ([Pushizo.Location.PERMISSION_REQUEST_CODE]); sonuçta SDK'ya [Pushizo.Location.onPermissionResult] bildirilir.
      * Uygulama manifest'inde konum izni yoksa izin istenemez ve `false` döner.
      */
     fun requestLocationPermission(rationale: String?, promise: Promise) {
-        if (HeroSignal.Location.permissionGranted) {
-            HeroSignal.Location.onPermissionResult()
+        if (Pushizo.Location.permissionGranted) {
+            Pushizo.Location.onPermissionResult()
             promise.resolve(true)
             return
         }
@@ -276,10 +276,10 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
             return
         }
         val listener = PermissionListener { requestCode, _, _ ->
-            if (requestCode != HeroSignal.Location.PERMISSION_REQUEST_CODE) return@PermissionListener false
+            if (requestCode != Pushizo.Location.PERMISSION_REQUEST_CODE) return@PermissionListener false
             // İzin verildiyse ve paylaşım açıksa yerel SDK konumu hemen gönderir.
-            HeroSignal.Location.onPermissionResult()
-            promise.resolve(HeroSignal.Location.permissionGranted)
+            Pushizo.Location.onPermissionResult()
+            promise.resolve(Pushizo.Location.permissionGranted)
             true
         }
         UiThreadUtil.runOnUiThread {
@@ -294,7 +294,7 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
                 .setMessage(rationale?.takeIf { it.isNotBlank() } ?: activity.getString(R.string.hs_location_rationale_message))
                 .setPositiveButton(R.string.hs_location_rationale_continue) { _, _ ->
                     proceeding = true
-                    activity.requestPermissions(permissions, HeroSignal.Location.PERMISSION_REQUEST_CODE, listener)
+                    activity.requestPermissions(permissions, Pushizo.Location.PERMISSION_REQUEST_CODE, listener)
                 }
                 .setNegativeButton(R.string.hs_location_rationale_not_now, null)
                 .setOnDismissListener { if (!proceeding) promise.resolve(false) }
@@ -314,11 +314,11 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
 
     // --- Hata ayıklama ---
 
-    fun setLogLevel(level: String) = HeroSignal.Debug.setLogLevel(logLevel(level))
+    fun setLogLevel(level: String) = Pushizo.Debug.setLogLevel(logLevel(level))
 
     // --- NativeEventEmitter ---
 
-    fun addListener(eventName: String) = HeroSignalBridge.onJsListenerAdded(eventName)
+    fun addListener(eventName: String) = PushizoBridge.onJsListenerAdded(eventName)
 
     // --- Yardımcılar ---
 
@@ -345,7 +345,7 @@ class HeroSignalModuleImpl(private val context: ReactApplicationContext) {
     }
 
     companion object {
-        const val NAME = "HeroSignal"
+        const val NAME = "Pushizo"
         const val PLATFORM_NOT_SUPPORTED = "PLATFORM_NOT_SUPPORTED"
         const val LIVE_ACTIVITIES_IOS_ONLY = "Live Activities yalnızca iOS'ta desteklenir"
 

@@ -10,7 +10,7 @@ import * as path from 'path';
 import * as xcode from 'xcode';
 import type { XCBuildConfiguration } from 'xcode';
 import * as zlib from 'zlib';
-import withHeroSignal from '../src';
+import withPushizo from '../src';
 import { applyAndroidManifest, applySettingsGradle, copyGoogleServicesFile, ICON_RESOURCE, ICON_SIZES, META } from '../src/android';
 import { addNseTarget, applyAppDelegate, applyEntitlements, applyInfoPlist, applyPodfile, buildNseInfoPlist, LOCATION_USAGE_KEY, NSE_TARGET, PLIST } from '../src/ios';
 import { validateProps } from '../src/props';
@@ -67,15 +67,15 @@ function tempProject(): string {
 }
 
 /** Yapısı Firebase konsolu çıktısına benzeyen test fikstürü (gizli bilgi içermez). */
-const GOOGLE_SERVICES = JSON.stringify({ project_info: { project_number: '1', project_id: 'herosignal-example' }, client: [] });
+const GOOGLE_SERVICES = JSON.stringify({ project_info: { project_number: '1', project_id: 'pushizo-example' }, client: [] });
 
 function baseConfig(): ExportedConfig {
   return {
-    name: 'HeroSignalExample',
-    slug: 'herosignal-example',
+    name: 'PushizoExample',
+    slug: 'pushizo-example',
     version: '2.3.0',
-    ios: { bundleIdentifier: 'dev.herosignal.example', buildNumber: '17' },
-    android: { package: 'dev.herosignal.example', googleServicesFile: './google-services.json' },
+    ios: { bundleIdentifier: 'dev.pushizo.example', buildNumber: '17' },
+    android: { package: 'dev.pushizo.example', googleServicesFile: './google-services.json' },
   };
 }
 
@@ -151,16 +151,16 @@ describe('validateProps', () => {
 
   test('google-services.json yoksa Android uyarısı verilir, varsa verilmez', () => {
     const spy = jest.spyOn(WarningAggregator, 'addWarningAndroid').mockImplementation(() => undefined);
-    withHeroSignal({ ...baseConfig(), android: { package: 'dev.herosignal.example' } }, BASE);
-    expect(spy).toHaveBeenCalledWith('@herosignal/react-native', expect.stringContaining('google-services.json'));
+    withPushizo({ ...baseConfig(), android: { package: 'dev.pushizo.example' } }, BASE);
+    expect(spy).toHaveBeenCalledWith('@pushizo/react-native', expect.stringContaining('google-services.json'));
     spy.mockClear();
-    withHeroSignal(baseConfig(), BASE);
+    withPushizo(baseConfig(), BASE);
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
   });
 
   test('plugin seçenekleri doğrulanmadan mod eklemez', () => {
-    expect(() => withHeroSignal(baseConfig(), { mode: 'debug' } as never)).toThrow('@herosignal/react-native config plugin');
+    expect(() => withPushizo(baseConfig(), { mode: 'debug' } as never)).toThrow('@pushizo/react-native config plugin');
   });
 });
 
@@ -173,14 +173,14 @@ describe('iOS dönüşümleri', () => {
     expect(applyEntitlements<Record<string, unknown>>({}, validateProps({ ...BASE, mode: 'production' }), 'group.x')['aps-environment']).toBe('production');
   });
 
-  test('Info.plist: remote-notification ve HeroSignal anahtarları', () => {
+  test('Info.plist: remote-notification ve Pushizo anahtarları', () => {
     const p = applyInfoPlist(applyInfoPlist({ UIBackgroundModes: ['audio'] }, props, 'group.x'), props, 'group.x');
     expect(p).toEqual({
       UIBackgroundModes: ['audio', 'remote-notification'],
-      HeroSignalAppGroup: 'group.x',
-      HeroSignalAppId: 'app_test_123',
-      HeroSignalApiUrl: 'https://api.example.com',
-      HeroSignalRequiresPrivacyConsent: false,
+      PushizoAppGroup: 'group.x',
+      PushizoAppId: 'app_test_123',
+      PushizoApiUrl: 'https://api.example.com',
+      PushizoRequiresPrivacyConsent: false,
     });
   });
 
@@ -206,11 +206,11 @@ describe('iOS dönüşümleri', () => {
 
   test('yerel köprüler plugin anahtarlarını okur (Info.plist ve manifest sözleşmesi)', () => {
     const root = path.join(__dirname, '..', '..');
-    const swift = fs.readFileSync(path.join(root, 'ios', 'HeroSignalRNBridge.swift'), 'utf8');
+    const swift = fs.readFileSync(path.join(root, 'ios', 'PushizoRNBridge.swift'), 'utf8');
     for (const key of [PLIST.appId, PLIST.apiUrl, PLIST.requiresConsent, PLIST.logLevel]) expect(swift).toContain(`"${key}"`);
     expect(swift).toMatch(/autoInitialize[\s\S]*plistRequiresConsent[\s\S]*plistLogLevel[\s\S]*self\.start\(/);
     const kotlin = fs.readFileSync(
-      path.join(root, 'android', 'src', 'main', 'java', 'com', 'herosignal', 'reactnative', 'HeroSignalInitProvider.kt'),
+      path.join(root, 'android', 'src', 'main', 'java', 'com', 'pushizo', 'reactnative', 'PushizoInitProvider.kt'),
       'utf8',
     );
     for (const key of [META.appId, META.apiUrl, META.requiresConsent, META.logLevel, META.channelId, META.channelName]) {
@@ -220,31 +220,31 @@ describe('iOS dönüşümleri', () => {
 
   test('AppDelegate (Expo Swift): import ve super çağıran override eklenir, idempotent', () => {
     const once = applyAppDelegate(EXPO_APP_DELEGATE, 'swift');
-    expect(once).toContain('import HeroSignal');
+    expect(once).toContain('import Pushizo');
     expect(once).toContain('public override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken');
     expect(once).toContain('super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)');
     expect(applyAppDelegate(once, 'swift')).toBe(once);
   });
 
   test('AppDelegate (RN şablonu Swift, UIApplicationDelegate): override olmadan eklenir', () => {
-    const src = fs.readFileSync(path.join(FIXTURES, 'ios', 'HeroSignalExample', 'AppDelegate.swift'), 'utf8');
+    const src = fs.readFileSync(path.join(FIXTURES, 'ios', 'PushizoExample', 'AppDelegate.swift'), 'utf8');
     const out = applyAppDelegate(src, 'swift');
-    expect(out).toContain('  func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {\n    HeroSignal.setDeviceToken(deviceToken)');
+    expect(out).toContain('  func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {\n    Pushizo.setDeviceToken(deviceToken)');
     expect(out).not.toContain('override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken');
   });
 
   test('AppDelegate (Swift): mevcut token metodu varsa elle ekleme talimatı verilir', () => {
     const src = `${EXPO_APP_DELEGATE.replace('}\n}\n', '}\n  public override func application(_ a: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken d: Data) {}\n}\n')}`;
-    expect(() => applyAppDelegate(src, 'swift')).toThrow('HeroSignal.setDeviceToken(deviceToken)');
+    expect(() => applyAppDelegate(src, 'swift')).toThrow('Pushizo.setDeviceToken(deviceToken)');
   });
 
   test('AppDelegate (Objective-C++): mevcut metotlara çağrı eklenir', () => {
     const out = applyAppDelegate(OBJC_APP_DELEGATE, 'objcpp');
-    expect(out).toContain('#import <HeroSignalReactNative/HeroSignalRNPush.h>');
+    expect(out).toContain('#import <PushizoReactNative/PushizoRNPush.h>');
     expect(out).toContain(
-      'didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken\n{\n// @generated begin herosignal-apns-token - expo prebuild (DO NOT MODIFY)\n  [HeroSignalRNPush didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];\n// @generated end herosignal-apns-token\n  return [super',
+      'didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken\n{\n// @generated begin pushizo-apns-token - expo prebuild (DO NOT MODIFY)\n  [PushizoRNPush didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];\n// @generated end pushizo-apns-token\n  return [super',
     );
-    expect(out).toContain('[HeroSignalRNPush didFailToRegisterForRemoteNotificationsWithError:error];');
+    expect(out).toContain('[PushizoRNPush didFailToRegisterForRemoteNotificationsWithError:error];');
     expect(applyAppDelegate(out, 'objcpp')).toBe(out);
   });
 
@@ -262,27 +262,27 @@ describe('iOS dönüşümleri', () => {
     const podfile = fs.readFileSync(path.join(FIXTURES, 'ios', 'Podfile'), 'utf8').replace(/\r\n/g, '\n');
     const p = validateProps({ ...BASE, iosSdkPath: '../../../sdk/ios' });
     const out = applyPodfile(applyPodfile(podfile, p), p);
-    expect(out.match(/target 'HeroSignalNotificationServiceExtension' do/g)).toHaveLength(1);
-    expect(out).toContain("pod 'HeroSignal/Extension', :path => '../../../sdk/ios'");
-    expect(out).toMatch(/config = use_native_modules!\n# @generated begin herosignal-sdk[^\n]*\n {2}pod 'HeroSignal', :path => '..\/..\/..\/sdk\/ios'/);
+    expect(out.match(/target 'PushizoNotificationServiceExtension' do/g)).toHaveLength(1);
+    expect(out).toContain("pod 'Pushizo/Extension', :path => '../../../sdk/ios'");
+    expect(out).toMatch(/config = use_native_modules!\n# @generated begin pushizo-sdk[^\n]*\n {2}pod 'Pushizo', :path => '..\/..\/..\/sdk\/ios'/);
     const published = applyPodfile(podfile, props);
-    expect(published).toContain("pod 'HeroSignal/Extension', '~> 0.1'");
+    expect(published).toContain("pod 'Pushizo/Extension', '~> 0.1'");
     expect(applyPodfile(out, validateProps({ mode: 'development', iosNotificationServiceExtension: false }))).not.toContain(NSE_TARGET);
   });
 
   test('NSE Info.plist: şablona app kimliği, API ve App Group eklenir (XML kaçışlı)', () => {
     const template = fs.readFileSync(path.join(__dirname, '..', 'templates', NSE_TARGET, 'Info.plist'), 'utf8');
     const out = buildNseInfoPlist(template, validateProps({ ...BASE, apiUrl: 'https://a.example.com/?x=1&y=2' }), 'group.x');
-    expect(out).toContain('<key>HeroSignalAppId</key>\n\t<string>app_test_123</string>');
+    expect(out).toContain('<key>PushizoAppId</key>\n\t<string>app_test_123</string>');
     expect(out).toContain('<string>https://a.example.com/?x=1&amp;y=2</string>');
     expect(out).toContain('<key>NSExtensionPointIdentifier</key>');
     expect(out.trim().endsWith('</plist>')).toBe(true);
   });
 
   test('Xcode: NSE hedefi, derleme ayarları ve gömme aşaması eklenir (idempotent)', () => {
-    const project = xcode.project(path.join(FIXTURES, 'ios', 'HeroSignalExample.xcodeproj', 'project.pbxproj'));
+    const project = xcode.project(path.join(FIXTURES, 'ios', 'PushizoExample.xcodeproj', 'project.pbxproj'));
     project.parseSync();
-    const options = { bundleId: 'dev.herosignal.example', deploymentTarget: '15.0', devTeam: 'ABCDE12345', version: '2.3.0', buildNumber: '17' };
+    const options = { bundleId: 'dev.pushizo.example', deploymentTarget: '15.0', devTeam: 'ABCDE12345', version: '2.3.0', buildNumber: '17' };
     addNseTarget(project, options);
     addNseTarget(project, options);
     const targets = Object.values(project.pbxNativeTargetSection()).filter((t) => typeof t === 'object' && t.name === `"${NSE_TARGET}"`);
@@ -299,7 +299,7 @@ describe('iOS dönüşümleri', () => {
         DEVELOPMENT_TEAM: 'ABCDE12345',
         MARKETING_VERSION: '2.3.0',
         CURRENT_PROJECT_VERSION: '17',
-        PRODUCT_BUNDLE_IDENTIFIER: `"dev.herosignal.example.${NSE_TARGET}"`,
+        PRODUCT_BUNDLE_IDENTIFIER: `"dev.pushizo.example.${NSE_TARGET}"`,
       });
     }
     const output = project.writeSync();
@@ -333,7 +333,7 @@ describe('Android dönüşümleri', () => {
     );
     expect(meta).toEqual({
       [META.icon]: `@drawable/${ICON_RESOURCE}`,
-      [META.color]: '@color/herosignal_notification_color',
+      [META.color]: '@color/pushizo_notification_color',
       [META.appId]: 'app_test_123',
       [META.apiUrl]: 'https://api.example.com',
       [META.requiresConsent]: 'true',
@@ -378,12 +378,12 @@ describe('Android dönüşümleri', () => {
     expect(AndroidConfig.Manifest.getMainApplicationOrThrow(second)['meta-data'] ?? []).toHaveLength(0);
   });
 
-  test('settings.gradle: monorepo :herosignal modülü (idempotent)', () => {
+  test('settings.gradle: monorepo :pushizo modülü (idempotent)', () => {
     const src = fs.readFileSync(path.join(FIXTURES, 'android', 'settings.gradle'), 'utf8');
-    const once = applySettingsGradle(src, '../../../sdk/android/herosignal');
-    expect(once).toContain("include ':herosignal'");
-    expect(once).toContain("project(':herosignal').projectDir = new File(rootProject.projectDir, '../../../sdk/android/herosignal')");
-    expect(applySettingsGradle(once, '../../../sdk/android/herosignal')).toBe(once);
+    const once = applySettingsGradle(src, '../../../sdk/android/pushizo');
+    expect(once).toContain("include ':pushizo'");
+    expect(once).toContain("project(':pushizo').projectDir = new File(rootProject.projectDir, '../../../sdk/android/pushizo')");
+    expect(applySettingsGradle(once, '../../../sdk/android/pushizo')).toBe(once);
   });
 });
 
@@ -391,7 +391,7 @@ describe('tüm mod zinciri (compileModsAsync)', () => {
   test('örnek projeye iOS ve Android değişiklikleri uygulanır', async () => {
     const projectRoot = tempProject();
     try {
-      const config = withHeroSignal(baseConfig(), {
+      const config = withPushizo(baseConfig(), {
         ...BASE,
         mode: 'production',
         apiUrl: 'https://api.example.com',
@@ -401,25 +401,25 @@ describe('tüm mod zinciri (compileModsAsync)', () => {
       await compileModsAsync(config, { projectRoot, platforms: ['ios', 'android'], introspect: false, assertMissingModProviders: false });
 
       const ios = path.join(projectRoot, 'ios');
-      const entitlements = fs.readFileSync(path.join(ios, 'HeroSignalExample', 'HeroSignalExample.entitlements'), 'utf8');
+      const entitlements = fs.readFileSync(path.join(ios, 'PushizoExample', 'PushizoExample.entitlements'), 'utf8');
       expect(entitlements).toContain('<key>aps-environment</key>\n    <string>production</string>');
-      expect(entitlements).toContain('<string>group.dev.herosignal.example.herosignal</string>');
-      const info = fs.readFileSync(path.join(ios, 'HeroSignalExample', 'Info.plist'), 'utf8');
+      expect(entitlements).toContain('<string>group.dev.pushizo.example.pushizo</string>');
+      const info = fs.readFileSync(path.join(ios, 'PushizoExample', 'Info.plist'), 'utf8');
       expect(info).toContain('<string>remote-notification</string>');
-      expect(info).toContain('<key>HeroSignalAppId</key>');
-      expect(fs.readFileSync(path.join(ios, 'HeroSignalExample', 'AppDelegate.swift'), 'utf8')).toContain('HeroSignal.setDeviceToken(deviceToken)');
+      expect(info).toContain('<key>PushizoAppId</key>');
+      expect(fs.readFileSync(path.join(ios, 'PushizoExample', 'AppDelegate.swift'), 'utf8')).toContain('Pushizo.setDeviceToken(deviceToken)');
       expect(fs.readFileSync(path.join(ios, 'Podfile'), 'utf8')).toContain(`target '${NSE_TARGET}' do`);
       for (const file of ['NotificationService.swift', 'Info.plist', `${NSE_TARGET}.entitlements`]) {
         expect(fs.existsSync(path.join(ios, NSE_TARGET, file))).toBe(true);
       }
-      expect(fs.readFileSync(path.join(ios, 'HeroSignalExample.xcodeproj', 'project.pbxproj'), 'utf8')).toContain(`${NSE_TARGET}.appex`);
+      expect(fs.readFileSync(path.join(ios, 'PushizoExample.xcodeproj', 'project.pbxproj'), 'utf8')).toContain(`${NSE_TARGET}.appex`);
 
       const res = path.join(projectRoot, 'android', 'app', 'src', 'main', 'res');
       for (const [density, size] of Object.entries(ICON_SIZES)) {
         const png = fs.readFileSync(path.join(res, `drawable-${density}`, `${ICON_RESOURCE}.png`));
         expect(png.readUInt32BE(16)).toBe(size);
       }
-      expect(fs.readFileSync(path.join(res, 'values', 'colors.xml'), 'utf8')).toContain('<color name="herosignal_notification_color">#FF5A1F</color>');
+      expect(fs.readFileSync(path.join(res, 'values', 'colors.xml'), 'utf8')).toContain('<color name="pushizo_notification_color">#FF5A1F</color>');
       const manifest = fs.readFileSync(path.join(projectRoot, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'), 'utf8');
       expect(manifest).toContain('android.permission.POST_NOTIFICATIONS');
       expect(manifest).toContain(`android:name="${META.appId}" android:value="app_test_123"`);
@@ -432,7 +432,7 @@ describe('tüm mod zinciri (compileModsAsync)', () => {
       expect(fs.readFileSync(path.join(android, 'app', 'build.gradle'), 'utf8').match(applyPattern)).toHaveLength(1);
 
       // İkinci prebuild (ve Expo'nun varsayılan eklentileri) aynı satırları çoğaltmaz.
-      const again = withHeroSignal(baseConfig(), { ...BASE, mode: 'production' });
+      const again = withPushizo(baseConfig(), { ...BASE, mode: 'production' });
       await compileModsAsync(again, { projectRoot, platforms: ['android'], introspect: false, assertMissingModProviders: false });
       expect(fs.readFileSync(path.join(android, 'app', 'build.gradle'), 'utf8').match(applyPattern)).toHaveLength(1);
       expect(fs.readFileSync(path.join(android, 'build.gradle'), 'utf8').match(/com\.google\.gms:google-services/g)).toHaveLength(1);

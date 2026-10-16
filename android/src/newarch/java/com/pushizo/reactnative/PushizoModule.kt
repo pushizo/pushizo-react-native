@@ -1,15 +1,15 @@
-package com.herosignal.reactnative
+package com.pushizo.reactnative
 
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
 
-/** Yeni mimari (TurboModule): codegen'in ürettiği [NativeHeroSignalSpec] uygulaması; gövde [HeroSignalModuleImpl]'dedir. */
-class HeroSignalModule(reactContext: ReactApplicationContext) : NativeHeroSignalSpec(reactContext) {
-    private val impl = HeroSignalModuleImpl(reactContext)
+/** Yeni mimari (TurboModule): codegen'in ürettiği [NativePushizoSpec] uygulaması; gövde [PushizoModuleImpl]'dedir. */
+class PushizoModule(reactContext: ReactApplicationContext) : NativePushizoSpec(reactContext) {
+    private val impl = PushizoModuleImpl(reactContext)
 
-    override fun getName(): String = HeroSignalModuleImpl.NAME
+    override fun getName(): String = PushizoModuleImpl.NAME
 
     override fun invalidate() {
         impl.invalidate()

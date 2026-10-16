@@ -1,14 +1,14 @@
 /**
- * @herosignal/react-native — HeroSignal Android/iOS SDK'larının React Native köprüsü.
+ * @pushizo/react-native — Pushizo Android/iOS SDK'larının React Native köprüsü.
  * Yüzey plan 06 §6.1 (eski sağlayıcı v5 React Native ile uyumlu).
  */
 export {
-  HeroSignal,
+  Pushizo,
   DisplayableNotification,
   NotificationWillDisplayEvent,
   type NotificationEventMap,
   type InAppEventMap,
-} from './HeroSignal';
+} from './Pushizo';
 export {
   LogLevel,
   type InitializeOptions,
@@ -31,4 +31,4 @@ export {
   type UserPreference,
   type UserPreferences,
 } from './types';
-export { HeroSignal as default } from './HeroSignal';
+export { Pushizo as default } from './Pushizo';

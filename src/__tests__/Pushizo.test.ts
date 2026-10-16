@@ -100,7 +100,7 @@ function load(options: { turbo?: boolean; legacy?: boolean } = { turbo: true }) 
   const handlers = new Map<string, Set<Handler>>();
   jest.doMock('react-native', () => ({
     Platform: { OS: 'android', select: (o: Record<string, unknown>) => o.android ?? o.default },
-    NativeModules: options.legacy ? { HeroSignal: native } : {},
+    NativeModules: options.legacy ? { Pushizo: native } : {},
     TurboModuleRegistry: { get: jest.fn(() => (options.turbo ? native : null)) },
     NativeEventEmitter: class {
       constructor(private readonly module: { addListener: (e: string) => void; removeListeners: (n: number) => void }) {}
@@ -128,79 +128,79 @@ function load(options: { turbo?: boolean; legacy?: boolean } = { turbo: true }) 
   return { ...sdk, env };
 }
 
-describe('HeroSignal (React Native)', () => {
+describe('Pushizo (React Native)', () => {
   test('initialize: appId ve tanımlı seçenekler yerel modüle iletilir, izin önbelleği güncellenir', async () => {
-    const { HeroSignal, LogLevel, env } = load();
-    await HeroSignal.initialize('app_1', { apiUrl: 'https://api.example.com', logLevel: LogLevel.Debug, appGroup: undefined });
+    const { Pushizo, LogLevel, env } = load();
+    await Pushizo.initialize('app_1', { apiUrl: 'https://api.example.com', logLevel: LogLevel.Debug, appGroup: undefined });
     expect(env.native.initialize).toHaveBeenCalledWith('app_1', { apiUrl: 'https://api.example.com', logLevel: 'debug' });
-    expect(HeroSignal.Notifications.permission).toBe(true);
+    expect(Pushizo.Notifications.permission).toBe(true);
     // izin olayı içeride dinlenir; tekrar initialize ikinci abonelik açmaz
-    await HeroSignal.initialize('app_1');
-    expect(env.listenerCount('HeroSignal-permissionChange')).toBe(1);
+    await Pushizo.initialize('app_1');
+    expect(env.listenerCount('Pushizo-permissionChange')).toBe(1);
   });
 
   test('initialize: geçersiz appId ve günlük seviyesi reddedilir', async () => {
-    const { HeroSignal, env } = load();
-    await expect(HeroSignal.initialize('  ')).rejects.toThrow('appId');
-    await expect(HeroSignal.initialize('app_1', { logLevel: 'verbose' as never })).rejects.toThrow('günlük seviyesi');
+    const { Pushizo, env } = load();
+    await expect(Pushizo.initialize('  ')).rejects.toThrow('appId');
+    await expect(Pushizo.initialize('app_1', { logLevel: 'verbose' as never })).rejects.toThrow('günlük seviyesi');
     expect(env.native.initialize).not.toHaveBeenCalled();
   });
 
-  test('eski mimari: TurboModule yoksa NativeModules.HeroSignal kullanılır', async () => {
-    const { HeroSignal, env } = load({ turbo: false, legacy: true });
-    await HeroSignal.login('user_42');
+  test('eski mimari: TurboModule yoksa NativeModules.Pushizo kullanılır', async () => {
+    const { Pushizo, env } = load({ turbo: false, legacy: true });
+    await Pushizo.login('user_42');
     expect(env.native.login).toHaveBeenCalledWith('user_42', null, null);
   });
 
   test('yerel modül bağlı değilse açıklayıcı hata verilir', () => {
-    const { HeroSignal } = load({ turbo: false, legacy: false });
-    expect(() => HeroSignal.logout()).toThrow('yerel modülü bulunamadı');
+    const { Pushizo } = load({ turbo: false, legacy: false });
+    expect(() => Pushizo.logout()).toThrow('yerel modülü bulunamadı');
   });
 
   test('login/logout/consent', async () => {
-    const { HeroSignal, env } = load();
-    await HeroSignal.login('user_42', 'hash');
-    HeroSignal.logout();
-    HeroSignal.setConsentGiven(true);
+    const { Pushizo, env } = load();
+    await Pushizo.login('user_42', 'hash');
+    Pushizo.logout();
+    Pushizo.setConsentGiven(true);
     expect(env.native.login).toHaveBeenCalledWith('user_42', 'hash', null);
     expect(env.native.logout).toHaveBeenCalled();
     expect(env.native.setConsentGiven).toHaveBeenCalledWith(true);
   });
 
   test('JWT identity verification: login seçenekleri ve updateUserJwt', async () => {
-    const { HeroSignal, env } = load();
-    await HeroSignal.login('user_42', { jwt: 'a.b.c' });
+    const { Pushizo, env } = load();
+    await Pushizo.login('user_42', { jwt: 'a.b.c' });
     expect(env.native.login).toHaveBeenLastCalledWith('user_42', null, 'a.b.c');
-    await HeroSignal.login('user_42', { identityHash: 'hash', jwt: 'a.b.c' });
+    await Pushizo.login('user_42', { identityHash: 'hash', jwt: 'a.b.c' });
     expect(env.native.login).toHaveBeenLastCalledWith('user_42', 'hash', 'a.b.c');
-    await HeroSignal.login('user_42', {});
+    await Pushizo.login('user_42', {});
     expect(env.native.login).toHaveBeenLastCalledWith('user_42', null, null);
-    expect(() => HeroSignal.login('user_42', { jwt: ' ' })).toThrow('jwt');
+    expect(() => Pushizo.login('user_42', { jwt: ' ' })).toThrow('jwt');
 
-    await HeroSignal.updateUserJwt('d.e.f');
+    await Pushizo.updateUserJwt('d.e.f');
     expect(env.native.updateUserJwt).toHaveBeenCalledWith('d.e.f');
-    expect(() => HeroSignal.updateUserJwt('')).toThrow('jwt');
+    expect(() => Pushizo.updateUserJwt('')).toThrow('jwt');
   });
 
   test('LiveActivities: genel tür kurulumu ve yerel başlatma argümanları yerel modüle iletilir', async () => {
-    const { HeroSignal, env } = load();
-    await HeroSignal.LiveActivities.setupDefaultLiveActivity();
+    const { Pushizo, env } = load();
+    await Pushizo.LiveActivities.setupDefaultLiveActivity();
     expect(env.native.setupDefaultLiveActivity).toHaveBeenCalledTimes(1);
 
-    await HeroSignal.LiveActivities.startDefaultLiveActivity('order_42', { title: 'Sipariş #42' }, { status: 'Yolda', eta: 12, late: false });
+    await Pushizo.LiveActivities.startDefaultLiveActivity('order_42', { title: 'Sipariş #42' }, { status: 'Yolda', eta: 12, late: false });
     expect(env.native.startDefaultLiveActivity).toHaveBeenCalledWith(
       'order_42',
       { title: 'Sipariş #42' },
       { status: 'Yolda', eta: 12, late: false },
     );
-    await HeroSignal.LiveActivities.startDefaultLiveActivity('ns:order.1-a', {}, {});
+    await Pushizo.LiveActivities.startDefaultLiveActivity('ns:order.1-a', {}, {});
     expect(env.native.startDefaultLiveActivity).toHaveBeenLastCalledWith('ns:order.1-a', {}, {});
   });
 
   test('LiveActivities: geçersiz kimlik, nesne, anahtar ve değerler yerel modüle gitmeden reddedilir', () => {
-    const { HeroSignal, env } = load();
-    const start = (...args: Parameters<typeof HeroSignal.LiveActivities.startDefaultLiveActivity>) =>
-      HeroSignal.LiveActivities.startDefaultLiveActivity(...args);
+    const { Pushizo, env } = load();
+    const start = (...args: Parameters<typeof Pushizo.LiveActivities.startDefaultLiveActivity>) =>
+      Pushizo.LiveActivities.startDefaultLiveActivity(...args);
     expect(() => start('', {}, {})).toThrow('activityId');
     expect(() => start('a'.repeat(101), {}, {})).toThrow('activityId');
     expect(() => start('sipariş 42', {}, {})).toThrow('activityId');
@@ -209,78 +209,78 @@ describe('HeroSignal (React Native)', () => {
     expect(() => start('order_42', [] as never, {})).toThrow('attributes düz bir nesne');
     expect(() => start('order_42', new Date() as never, {})).toThrow('attributes düz bir nesne');
     expect(() => start('order_42', {}, 'durum' as never)).toThrow('contentState düz bir nesne');
-    expect(() => start('order_42', { herosignal: 'x' }, {})).toThrow("'herosignal' anahtarı ayrılmıştır");
+    expect(() => start('order_42', { pushizo: 'x' }, {})).toThrow("'pushizo' anahtarı ayrılmıştır");
     expect(() => start('order_42', { ['k'.repeat(65)]: 'x' }, {})).toThrow('1-64');
     expect(() => start('order_42', { '': 'x' }, {})).toThrow('1-64');
     expect(() => start('order_42', {}, { eta: Number.NaN })).toThrow('contentState.eta');
     expect(() => start('order_42', {}, { eta: Infinity })).toThrow('contentState.eta');
     expect(() => start('order_42', {}, { nested: { a: 1 } } as never)).toThrow('contentState.nested');
     expect(() => start('order_42', { note: null } as never, {})).toThrow('attributes.note');
-    // contentState içinde `herosignal` ayrılmış değildir.
-    expect(() => start('order_42', {}, { herosignal: 'ok' })).not.toThrow();
+    // contentState içinde `pushizo` ayrılmış değildir.
+    expect(() => start('order_42', {}, { pushizo: 'ok' })).not.toThrow();
     expect(env.native.startDefaultLiveActivity).toHaveBeenCalledTimes(1);
   });
 
   test('LiveActivities: yerel hata kodu (ör. Android PLATFORM_NOT_SUPPORTED) çağırana aynen iletilir', async () => {
-    const { HeroSignal, env } = load();
+    const { Pushizo, env } = load();
     const error = Object.assign(new Error("Live Activities yalnızca iOS'ta desteklenir"), { code: 'PLATFORM_NOT_SUPPORTED' });
     env.native.setupDefaultLiveActivity.mockReturnValueOnce(Promise.reject(error));
-    await expect(HeroSignal.LiveActivities.setupDefaultLiveActivity()).rejects.toMatchObject({ code: 'PLATFORM_NOT_SUPPORTED' });
+    await expect(Pushizo.LiveActivities.setupDefaultLiveActivity()).rejects.toMatchObject({ code: 'PLATFORM_NOT_SUPPORTED' });
   });
 
   test('Location: setShared ve isShared yerel modüle iletilir', async () => {
-    const { HeroSignal, env } = load();
-    HeroSignal.Location.setShared(true);
-    HeroSignal.Location.setShared(false);
+    const { Pushizo, env } = load();
+    Pushizo.Location.setShared(true);
+    Pushizo.Location.setShared(false);
     // Mantıksal olmayan değer paylaşımı açmaz (gizlilik açısından güvenli varsayılan).
-    HeroSignal.Location.setShared('true' as never);
+    Pushizo.Location.setShared('true' as never);
     expect(env.native.setLocationShared.mock.calls).toEqual([[true], [false], [false]]);
 
-    await expect(HeroSignal.Location.isShared()).resolves.toBe(true);
+    await expect(Pushizo.Location.isShared()).resolves.toBe(true);
     env.native.isLocationShared.mockResolvedValueOnce(null);
-    await expect(HeroSignal.Location.isShared()).resolves.toBe(false);
+    await expect(Pushizo.Location.isShared()).resolves.toBe(false);
     expect(env.native.isLocationShared).toHaveBeenCalledTimes(2);
   });
 
   test('Location.requestPermission: açıklama metni iletilir, boş metin varsayılana düşer, sonuç döner', async () => {
-    const { HeroSignal, env } = load();
-    await expect(HeroSignal.Location.requestPermission()).resolves.toBe(true);
+    const { Pushizo, env } = load();
+    await expect(Pushizo.Location.requestPermission()).resolves.toBe(true);
     expect(env.native.requestLocationPermission).toHaveBeenLastCalledWith(null);
-    await HeroSignal.Location.requestPermission('Yakındaki mağazaları göstermek için konumunuzu kullanırız.');
+    await Pushizo.Location.requestPermission('Yakındaki mağazaları göstermek için konumunuzu kullanırız.');
     expect(env.native.requestLocationPermission).toHaveBeenLastCalledWith('Yakındaki mağazaları göstermek için konumunuzu kullanırız.');
-    await HeroSignal.Location.requestPermission('   ');
+    await Pushizo.Location.requestPermission('   ');
     expect(env.native.requestLocationPermission).toHaveBeenLastCalledWith(null);
     env.native.requestLocationPermission.mockResolvedValueOnce(false);
-    await expect(HeroSignal.Location.requestPermission()).resolves.toBe(false);
+    await expect(Pushizo.Location.requestPermission()).resolves.toBe(false);
   });
 
   test('Location.requestPermission: geçersiz açıklama yerel modüle gitmez; NO_ACTIVITY iletilir', async () => {
-    const { HeroSignal, env } = load();
-    await expect(HeroSignal.Location.requestPermission(42 as never)).rejects.toThrow('rationale');
+    const { Pushizo, env } = load();
+    await expect(Pushizo.Location.requestPermission(42 as never)).rejects.toThrow('rationale');
     expect(env.native.requestLocationPermission).not.toHaveBeenCalled();
     env.native.requestLocationPermission.mockReturnValueOnce(
       Promise.reject(Object.assign(new Error('İzin istemek için ön planda bir ReactActivity gerekli.'), { code: 'NO_ACTIVITY' })),
     );
-    await expect(HeroSignal.Location.requestPermission()).rejects.toMatchObject({ code: 'NO_ACTIVITY' });
+    await expect(Pushizo.Location.requestPermission()).rejects.toMatchObject({ code: 'NO_ACTIVITY' });
   });
 
-  test('Location: eski mimaride NativeModules.HeroSignal kullanılır', async () => {
-    const { HeroSignal, env } = load({ turbo: false, legacy: true });
-    HeroSignal.Location.setShared(true);
-    await expect(HeroSignal.Location.isShared()).resolves.toBe(true);
+  test('Location: eski mimaride NativeModules.Pushizo kullanılır', async () => {
+    const { Pushizo, env } = load({ turbo: false, legacy: true });
+    Pushizo.Location.setShared(true);
+    await expect(Pushizo.Location.isShared()).resolves.toBe(true);
     expect(env.native.setLocationShared).toHaveBeenCalledWith(true);
   });
 
   test('User: tag, alias, dil, e-posta/SMS ve kimlikler', async () => {
-    const { HeroSignal, env } = load();
-    await HeroSignal.User.addTag('plan', 'pro');
-    await HeroSignal.User.addTags({ a: '1', b: '2' });
-    await HeroSignal.User.removeTag('plan');
-    await HeroSignal.User.addAlias('crm_id', '42');
-    await HeroSignal.User.removeAlias('crm_id');
-    await HeroSignal.User.setLanguage('tr');
-    await HeroSignal.User.addEmail('ali@example.com');
-    await HeroSignal.User.addSms('+905321234567');
+    const { Pushizo, env } = load();
+    await Pushizo.User.addTag('plan', 'pro');
+    await Pushizo.User.addTags({ a: '1', b: '2' });
+    await Pushizo.User.removeTag('plan');
+    await Pushizo.User.addAlias('crm_id', '42');
+    await Pushizo.User.removeAlias('crm_id');
+    await Pushizo.User.setLanguage('tr');
+    await Pushizo.User.addEmail('ali@example.com');
+    await Pushizo.User.addSms('+905321234567');
     expect(env.native.addTags).toHaveBeenNthCalledWith(1, { plan: 'pro' });
     expect(env.native.addTags).toHaveBeenNthCalledWith(2, { a: '1', b: '2' });
     expect(env.native.removeTags).toHaveBeenCalledWith(['plan']);
@@ -289,38 +289,38 @@ describe('HeroSignal (React Native)', () => {
     expect(env.native.setLanguage).toHaveBeenCalledWith('tr');
     expect(env.native.addEmail).toHaveBeenCalledWith('ali@example.com');
     expect(env.native.addSms).toHaveBeenCalledWith('+905321234567');
-    await expect(HeroSignal.User.getTags()).resolves.toEqual({ plan: 'pro', level: '3' });
-    await expect(HeroSignal.User.getExternalId()).resolves.toBe('user_42');
-    await expect(HeroSignal.User.getHeroSignalId()).resolves.toBe('hs_1');
-    await expect(HeroSignal.User.getEmails()).resolves.toEqual(['ali@example.com']);
-    await expect(HeroSignal.User.getSmsNumbers()).resolves.toEqual(['+905321234567']);
+    await expect(Pushizo.User.getTags()).resolves.toEqual({ plan: 'pro', level: '3' });
+    await expect(Pushizo.User.getExternalId()).resolves.toBe('user_42');
+    await expect(Pushizo.User.getPushizoId()).resolves.toBe('hs_1');
+    await expect(Pushizo.User.getEmails()).resolves.toEqual(['ali@example.com']);
+    await expect(Pushizo.User.getSmsNumbers()).resolves.toEqual(['+905321234567']);
   });
 
   test('User: e-posta/SMS listesi yerelden dizi dışı gelirse boş liste döner', async () => {
-    const { HeroSignal, env } = load();
+    const { Pushizo, env } = load();
     env.native.getEmails.mockResolvedValueOnce(null);
     env.native.getSmsNumbers.mockResolvedValueOnce(undefined);
-    await expect(HeroSignal.User.getEmails()).resolves.toEqual([]);
-    await expect(HeroSignal.User.getSmsNumbers()).resolves.toEqual([]);
+    await expect(Pushizo.User.getEmails()).resolves.toEqual([]);
+    await expect(Pushizo.User.getSmsNumbers()).resolves.toEqual([]);
   });
 
   test('User: hatalı argümanlar yerel modüle gitmeden reddedilir', () => {
-    const { HeroSignal, env } = load();
-    expect(() => HeroSignal.User.addTags({ a: 1 } as never)).toThrow('tags.a');
-    expect(() => HeroSignal.User.removeTags('a' as never)).toThrow('metin dizisi');
-    expect(() => HeroSignal.User.addEmail('')).toThrow('email');
+    const { Pushizo, env } = load();
+    expect(() => Pushizo.User.addTags({ a: 1 } as never)).toThrow('tags.a');
+    expect(() => Pushizo.User.removeTags('a' as never)).toThrow('metin dizisi');
+    expect(() => Pushizo.User.addEmail('')).toThrow('email');
     expect(env.native.addTags).not.toHaveBeenCalled();
   });
 
   test('User: yerel doğrulama hatası (INVALID_ARGUMENT) uygulamaya iletilir', async () => {
-    const { HeroSignal, env } = load();
+    const { Pushizo, env } = load();
     env.native.addEmail.mockImplementationOnce(() => Promise.reject(Object.assign(new Error('Geçersiz e-posta'), { code: 'INVALID_ARGUMENT' })));
-    await expect(HeroSignal.User.addEmail('bozuk')).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+    await expect(Pushizo.User.addEmail('bozuk')).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
   });
 
   test('User.getPreferences: yerel sonuç tipli modele eşlenir', async () => {
-    const { HeroSignal, env } = load();
-    const result = await HeroSignal.User.getPreferences();
+    const { Pushizo, env } = load();
+    const result = await Pushizo.User.getPreferences();
     expect(env.native.getPreferences).toHaveBeenCalledWith();
     expect(result).toEqual({
       preferences: [
@@ -335,20 +335,20 @@ describe('HeroSignal (React Native)', () => {
   });
 
   test('User.getPreferences: boş/eksik yerel sonuç boş listelere düşer; NOT_READY iletilir', async () => {
-    const { HeroSignal, env } = load();
+    const { Pushizo, env } = load();
     env.native.getPreferences.mockImplementationOnce(() => Promise.resolve(null));
-    await expect(HeroSignal.User.getPreferences()).resolves.toEqual({ preferences: [], categories: [] });
+    await expect(Pushizo.User.getPreferences()).resolves.toEqual({ preferences: [], categories: [] });
     env.native.getPreferences.mockImplementationOnce(() => Promise.resolve({ preferences: 'bozuk', categories: [null, 3] }));
-    await expect(HeroSignal.User.getPreferences()).resolves.toEqual({ preferences: [], categories: [] });
+    await expect(Pushizo.User.getPreferences()).resolves.toEqual({ preferences: [], categories: [] });
     env.native.getPreferences.mockImplementationOnce(() =>
       Promise.reject(Object.assign(new Error('Abonelik henüz kaydedilmedi'), { code: 'NOT_READY' })),
     );
-    await expect(HeroSignal.User.getPreferences()).rejects.toMatchObject({ code: 'NOT_READY' });
+    await expect(Pushizo.User.getPreferences()).rejects.toMatchObject({ code: 'NOT_READY' });
   });
 
   test('User.setPreferences: girdi normalize edilip yerel modüle iletilir, güncel tercihler döner', async () => {
-    const { HeroSignal, env } = load();
-    const result = await HeroSignal.User.setPreferences([
+    const { Pushizo, env } = load();
+    const result = await Pushizo.User.setPreferences([
       { category: 'promo', optedIn: false },
       { category: 'news', channel: 'email', optedIn: true },
       { category: 'alerts', channel: null, optedIn: true },
@@ -363,44 +363,44 @@ describe('HeroSignal (React Native)', () => {
   });
 
   test('User.setPreferences: hatalı girdi yerel modüle gitmeden reddedilir', () => {
-    const { HeroSignal, env } = load();
+    const { Pushizo, env } = load();
     const tooMany = Array.from({ length: 101 }, (_, i) => ({ category: `c${i}`, optedIn: true }));
-    expect(() => HeroSignal.User.setPreferences([])).toThrow('1-100');
-    expect(() => HeroSignal.User.setPreferences(tooMany)).toThrow('1-100');
-    expect(() => HeroSignal.User.setPreferences('promo' as never)).toThrow('dizi');
-    expect(() => HeroSignal.User.setPreferences([null as never])).toThrow('preferences[0] bir nesne');
-    expect(() => HeroSignal.User.setPreferences([{ category: ' ', optedIn: true }])).toThrow('preferences[0].category');
-    expect(() => HeroSignal.User.setPreferences([{ category: 'x'.repeat(65), optedIn: true }])).toThrow('category');
-    expect(() => HeroSignal.User.setPreferences([{ category: 'promo', channel: 'push' as never, optedIn: true }])).toThrow('channel');
-    expect(() => HeroSignal.User.setPreferences([{ category: 'a', optedIn: true }, { category: 'b', optedIn: 'yes' as never }])).toThrow(
+    expect(() => Pushizo.User.setPreferences([])).toThrow('1-100');
+    expect(() => Pushizo.User.setPreferences(tooMany)).toThrow('1-100');
+    expect(() => Pushizo.User.setPreferences('promo' as never)).toThrow('dizi');
+    expect(() => Pushizo.User.setPreferences([null as never])).toThrow('preferences[0] bir nesne');
+    expect(() => Pushizo.User.setPreferences([{ category: ' ', optedIn: true }])).toThrow('preferences[0].category');
+    expect(() => Pushizo.User.setPreferences([{ category: 'x'.repeat(65), optedIn: true }])).toThrow('category');
+    expect(() => Pushizo.User.setPreferences([{ category: 'promo', channel: 'push' as never, optedIn: true }])).toThrow('channel');
+    expect(() => Pushizo.User.setPreferences([{ category: 'a', optedIn: true }, { category: 'b', optedIn: 'yes' as never }])).toThrow(
       'preferences[1].optedIn',
     );
     expect(env.native.setPreferences).not.toHaveBeenCalled();
   });
 
   test('User.setPreferences: yerel doğrulama/API hatası uygulamaya iletilir', async () => {
-    const { HeroSignal, env } = load();
+    const { Pushizo, env } = load();
     env.native.setPreferences.mockImplementationOnce(() =>
       Promise.reject(Object.assign(new Error('Kategori bulunamadı'), { code: 'HS_VALIDATION_ERROR' })),
     );
-    await expect(HeroSignal.User.setPreferences([{ category: 'missing', optedIn: true }])).rejects.toMatchObject({
+    await expect(Pushizo.User.setPreferences([{ category: 'missing', optedIn: true }])).rejects.toMatchObject({
       code: 'HS_VALIDATION_ERROR',
     });
   });
 
   test('pushSubscription: durum ve değişim olayı', async () => {
-    const { HeroSignal, env } = load();
-    await expect(HeroSignal.User.pushSubscription.getIdAsync()).resolves.toBe('sub_1');
-    await expect(HeroSignal.User.pushSubscription.getTokenAsync()).resolves.toBe('tok');
-    await expect(HeroSignal.User.pushSubscription.getOptedInAsync()).resolves.toBe(true);
-    HeroSignal.User.pushSubscription.optOut();
-    HeroSignal.User.pushSubscription.optIn();
+    const { Pushizo, env } = load();
+    await expect(Pushizo.User.pushSubscription.getIdAsync()).resolves.toBe('sub_1');
+    await expect(Pushizo.User.pushSubscription.getTokenAsync()).resolves.toBe('tok');
+    await expect(Pushizo.User.pushSubscription.getOptedInAsync()).resolves.toBe(true);
+    Pushizo.User.pushSubscription.optOut();
+    Pushizo.User.pushSubscription.optIn();
     expect(env.native.optOut).toHaveBeenCalled();
     expect(env.native.optIn).toHaveBeenCalled();
 
     const listener = jest.fn();
-    HeroSignal.User.pushSubscription.addEventListener('change', listener);
-    env.emit('HeroSignal-pushSubscriptionChange', {
+    Pushizo.User.pushSubscription.addEventListener('change', listener);
+    env.emit('Pushizo-pushSubscriptionChange', {
       previous: { id: null, token: null, optedIn: false, permission: false },
       current: { id: 'sub_1', token: 'tok', optedIn: true, permission: true },
     });
@@ -408,41 +408,41 @@ describe('HeroSignal (React Native)', () => {
       previous: { id: null, token: null, optedIn: false, permission: false },
       current: { id: 'sub_1', token: 'tok', optedIn: true, permission: true },
     });
-    HeroSignal.User.pushSubscription.removeEventListener('change', listener);
-    expect(env.listenerCount('HeroSignal-pushSubscriptionChange')).toBe(0);
+    Pushizo.User.pushSubscription.removeEventListener('change', listener);
+    expect(env.listenerCount('Pushizo-pushSubscriptionChange')).toBe(0);
   });
 
   test('Notifications: izin isteme, sorgu ve clearAll', async () => {
-    const { HeroSignal, env } = load();
-    await expect(HeroSignal.Notifications.requestPermission()).resolves.toBe(false);
-    expect(HeroSignal.Notifications.permission).toBe(false);
-    await expect(HeroSignal.Notifications.getPermissionAsync()).resolves.toBe(true);
-    expect(HeroSignal.Notifications.permission).toBe(true);
-    HeroSignal.Notifications.clearAll();
+    const { Pushizo, env } = load();
+    await expect(Pushizo.Notifications.requestPermission()).resolves.toBe(false);
+    expect(Pushizo.Notifications.permission).toBe(false);
+    await expect(Pushizo.Notifications.getPermissionAsync()).resolves.toBe(true);
+    expect(Pushizo.Notifications.permission).toBe(true);
+    Pushizo.Notifications.clearAll();
     expect(env.native.clearAll).toHaveBeenCalled();
   });
 
   test('Notifications: tekil ve gruplu bildirim kaldırma yerel modüle iletilir', async () => {
-    const { HeroSignal, env } = load();
-    await HeroSignal.Notifications.removeNotification(42);
-    await HeroSignal.Notifications.removeNotification('ios-request-1');
-    await HeroSignal.Notifications.removeGroupedNotifications('orders');
+    const { Pushizo, env } = load();
+    await Pushizo.Notifications.removeNotification(42);
+    await Pushizo.Notifications.removeNotification('ios-request-1');
+    await Pushizo.Notifications.removeGroupedNotifications('orders');
     expect(env.native.removeNotification).toHaveBeenNthCalledWith(1, '42');
     expect(env.native.removeNotification).toHaveBeenNthCalledWith(2, 'ios-request-1');
     expect(env.native.removeGroupedNotifications).toHaveBeenCalledWith('orders');
-    expect(() => HeroSignal.Notifications.removeNotification(1.5)).toThrow('tamsayı');
-    expect(() => HeroSignal.Notifications.removeNotification(' ')).toThrow(TypeError);
-    expect(() => HeroSignal.Notifications.removeGroupedNotifications('')).toThrow(TypeError);
+    expect(() => Pushizo.Notifications.removeNotification(1.5)).toThrow('tamsayı');
+    expect(() => Pushizo.Notifications.removeNotification(' ')).toThrow(TypeError);
+    expect(() => Pushizo.Notifications.removeGroupedNotifications('')).toThrow(TypeError);
     expect(env.native.removeNotification).toHaveBeenCalledTimes(2);
     expect(env.native.removeGroupedNotifications).toHaveBeenCalledTimes(1);
   });
 
   test('Notifications: tıklama olayı plan 06 biçiminde iletilir; son dinleyici çıkınca abonelik kapanır', () => {
-    const { HeroSignal, env } = load();
+    const { Pushizo, env } = load();
     const listener = jest.fn();
-    HeroSignal.Notifications.addEventListener('click', listener);
-    expect(env.native.addListener).toHaveBeenCalledWith('HeroSignal-notificationClick');
-    env.emit('HeroSignal-notificationClick', {
+    Pushizo.Notifications.addEventListener('click', listener);
+    expect(env.native.addListener).toHaveBeenCalledWith('Pushizo-notificationClick');
+    env.emit('Pushizo-notificationClick', {
       notification: { title: 'Kargo', body: 'Yolda', url: null, deliveryId: 'd1', messageId: 'm1', data: { order: '7' }, androidNotificationId: 77 },
       actionId: 'track',
       url: 'https://example.com/t/7',
@@ -460,41 +460,41 @@ describe('HeroSignal (React Native)', () => {
       },
       result: { actionId: 'track', url: 'https://example.com/t/7' },
     });
-    HeroSignal.Notifications.removeEventListener('click', listener);
+    Pushizo.Notifications.removeEventListener('click', listener);
     expect(env.native.removeListeners).toHaveBeenCalledWith(1);
-    expect(env.listenerCount('HeroSignal-notificationClick')).toBe(0);
+    expect(env.listenerCount('Pushizo-notificationClick')).toBe(0);
   });
 
   test('Notifications: bilinmeyen olay adı reddedilir', () => {
-    const { HeroSignal } = load();
-    expect(() => HeroSignal.Notifications.addEventListener('opened' as never, jest.fn())).toThrow('bilinmeyen');
+    const { Pushizo } = load();
+    expect(() => Pushizo.Notifications.addEventListener('opened' as never, jest.fn())).toThrow('bilinmeyen');
   });
 
   test('foregroundWillDisplay: engellenmezse gösterilir, dinleyici hatası gösterimi engellemez', () => {
-    const { HeroSignal, env } = load();
+    const { Pushizo, env } = load();
     const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     const listener = jest.fn(() => {
       throw new Error('uygulama hatası');
     });
-    HeroSignal.Notifications.addEventListener('foregroundWillDisplay', listener);
+    Pushizo.Notifications.addEventListener('foregroundWillDisplay', listener);
     expect(env.native.setForegroundHandlerEnabled).toHaveBeenCalledWith(true);
-    env.emit('HeroSignal-notificationWillDisplay', { notificationId: 'n1', notification: { title: 'T', data: {} } });
+    env.emit('Pushizo-notificationWillDisplay', { notificationId: 'n1', notification: { title: 'T', data: {} } });
     expect(listener).toHaveBeenCalled();
     expect(env.native.displayNotification).toHaveBeenCalledWith('n1');
     expect(env.native.preventDefault).not.toHaveBeenCalled();
-    HeroSignal.Notifications.removeEventListener('foregroundWillDisplay', listener);
+    Pushizo.Notifications.removeEventListener('foregroundWillDisplay', listener);
     expect(env.native.setForegroundHandlerEnabled).toHaveBeenLastCalledWith(false);
     spy.mockRestore();
   });
 
   test('foregroundWillDisplay: preventDefault sonrası ertelenmiş display()', () => {
-    const { HeroSignal, env } = load();
+    const { Pushizo, env } = load();
     let captured: NotificationWillDisplayEvent | null = null;
-    HeroSignal.Notifications.addEventListener('foregroundWillDisplay', (event) => {
+    Pushizo.Notifications.addEventListener('foregroundWillDisplay', (event) => {
       event.preventDefault();
       captured = event;
     });
-    env.emit('HeroSignal-notificationWillDisplay', { notificationId: 'n2', notification: { title: 'Sessiz', data: { silent: '1' } } });
+    env.emit('Pushizo-notificationWillDisplay', { notificationId: 'n2', notification: { title: 'Sessiz', data: { silent: '1' } } });
     expect(env.native.preventDefault).toHaveBeenCalledWith('n2');
     expect(env.native.displayNotification).not.toHaveBeenCalled();
     const event = captured as unknown as NotificationWillDisplayEvent;
@@ -504,62 +504,62 @@ describe('HeroSignal (React Native)', () => {
   });
 
   test('permissionChange: dinleyici ve önbellek', async () => {
-    const { HeroSignal, env } = load();
-    await HeroSignal.initialize('app_1');
+    const { Pushizo, env } = load();
+    await Pushizo.initialize('app_1');
     const listener = jest.fn();
-    HeroSignal.Notifications.addEventListener('permissionChange', listener);
-    env.emit('HeroSignal-permissionChange', { permission: false });
+    Pushizo.Notifications.addEventListener('permissionChange', listener);
+    env.emit('Pushizo-permissionChange', { permission: false });
     expect(listener).toHaveBeenCalledWith({ permission: false });
-    expect(HeroSignal.Notifications.permission).toBe(false);
-    HeroSignal.Notifications.removeEventListener('permissionChange', listener);
+    expect(Pushizo.Notifications.permission).toBe(false);
+    Pushizo.Notifications.removeEventListener('permissionChange', listener);
     // initialize'ın iç aboneliği açık kalır
-    expect(env.listenerCount('HeroSignal-permissionChange')).toBe(1);
+    expect(env.listenerCount('Pushizo-permissionChange')).toBe(1);
   });
 
   test('InAppMessages: tetikler, ekran, duraklatma', async () => {
-    const { HeroSignal, env } = load();
-    await HeroSignal.InAppMessages.addTrigger('level', 'gold');
-    HeroSignal.InAppMessages.removeTrigger('level');
-    HeroSignal.InAppMessages.clearTriggers();
-    HeroSignal.InAppMessages.setScreen('cart');
-    HeroSignal.InAppMessages.setScreen('');
-    HeroSignal.InAppMessages.setPaused(true);
+    const { Pushizo, env } = load();
+    await Pushizo.InAppMessages.addTrigger('level', 'gold');
+    Pushizo.InAppMessages.removeTrigger('level');
+    Pushizo.InAppMessages.clearTriggers();
+    Pushizo.InAppMessages.setScreen('cart');
+    Pushizo.InAppMessages.setScreen('');
+    Pushizo.InAppMessages.setPaused(true);
     expect(env.native.addTriggers).toHaveBeenCalledWith({ level: 'gold' });
     expect(env.native.removeTriggers).toHaveBeenCalledWith(['level']);
     expect(env.native.clearTriggers).toHaveBeenCalled();
     expect(env.native.setScreen).toHaveBeenNthCalledWith(1, 'cart');
     expect(env.native.setScreen).toHaveBeenNthCalledWith(2, null);
     expect(env.native.setInAppPaused).toHaveBeenCalledWith(true);
-    await expect(HeroSignal.InAppMessages.getTriggers()).resolves.toEqual({ level: 'gold' });
-    await expect(HeroSignal.InAppMessages.getPaused()).resolves.toBe(true);
+    await expect(Pushizo.InAppMessages.getTriggers()).resolves.toEqual({ level: 'gold' });
+    await expect(Pushizo.InAppMessages.getPaused()).resolves.toBe(true);
   });
 
   test('InAppMessages: tıklama ve yaşam döngüsü olayları tek yerel abonelikle yönlendirilir', () => {
-    const { HeroSignal, env } = load();
+    const { Pushizo, env } = load();
     const click = jest.fn();
     const willDisplay = jest.fn();
     const didDismiss = jest.fn();
-    HeroSignal.InAppMessages.addEventListener('click', click);
-    HeroSignal.InAppMessages.addEventListener('willDisplay', willDisplay);
-    HeroSignal.InAppMessages.addEventListener('didDismiss', didDismiss);
-    expect(env.listenerCount('HeroSignal-inAppLifecycle')).toBe(1);
+    Pushizo.InAppMessages.addEventListener('click', click);
+    Pushizo.InAppMessages.addEventListener('willDisplay', willDisplay);
+    Pushizo.InAppMessages.addEventListener('didDismiss', didDismiss);
+    expect(env.listenerCount('Pushizo-inAppLifecycle')).toBe(1);
 
-    env.emit('HeroSignal-inAppClick', { messageId: 'm1', actionId: 'buy', url: null });
-    env.emit('HeroSignal-inAppLifecycle', { event: 'willDisplay', messageId: 'm1' });
-    env.emit('HeroSignal-inAppLifecycle', { event: 'didDismiss', messageId: 'm1' });
+    env.emit('Pushizo-inAppClick', { messageId: 'm1', actionId: 'buy', url: null });
+    env.emit('Pushizo-inAppLifecycle', { event: 'willDisplay', messageId: 'm1' });
+    env.emit('Pushizo-inAppLifecycle', { event: 'didDismiss', messageId: 'm1' });
     expect(click).toHaveBeenCalledWith({ messageId: 'm1', actionId: 'buy', url: null });
     expect(willDisplay).toHaveBeenCalledWith({ messageId: 'm1' });
     expect(didDismiss).toHaveBeenCalledWith({ messageId: 'm1' });
 
-    HeroSignal.InAppMessages.removeEventListener('willDisplay', willDisplay);
-    expect(env.listenerCount('HeroSignal-inAppLifecycle')).toBe(1);
-    HeroSignal.InAppMessages.removeEventListener('didDismiss', didDismiss);
-    expect(env.listenerCount('HeroSignal-inAppLifecycle')).toBe(0);
+    Pushizo.InAppMessages.removeEventListener('willDisplay', willDisplay);
+    expect(env.listenerCount('Pushizo-inAppLifecycle')).toBe(1);
+    Pushizo.InAppMessages.removeEventListener('didDismiss', didDismiss);
+    expect(env.listenerCount('Pushizo-inAppLifecycle')).toBe(0);
   });
 
   test('Inbox: liste eşlemesi, limit doğrulaması ve işlemler', async () => {
-    const { HeroSignal, env } = load();
-    const page = await HeroSignal.Inbox.list({ limit: 20 });
+    const { Pushizo, env } = load();
+    const page = await Pushizo.Inbox.list({ limit: 20 });
     expect(env.native.inboxList).toHaveBeenCalledWith(20, null);
     expect(page).toEqual({
       items: [
@@ -569,25 +569,25 @@ describe('HeroSignal (React Native)', () => {
       nextCursor: 'c2',
       hasMore: true,
     });
-    await HeroSignal.Inbox.list({ cursor: 'c2' });
+    await Pushizo.Inbox.list({ cursor: 'c2' });
     expect(env.native.inboxList).toHaveBeenLastCalledWith(50, 'c2');
-    await expect(HeroSignal.Inbox.list({ limit: 0 })).rejects.toThrow('limit');
-    await expect(HeroSignal.Inbox.markRead('i1')).resolves.toMatchObject({ id: 'i1', read: true, readAt: 1700000001000 });
-    await expect(HeroSignal.Inbox.markAllRead()).resolves.toBe(0);
-    await HeroSignal.Inbox.archive('i1');
+    await expect(Pushizo.Inbox.list({ limit: 0 })).rejects.toThrow('limit');
+    await expect(Pushizo.Inbox.markRead('i1')).resolves.toMatchObject({ id: 'i1', read: true, readAt: 1700000001000 });
+    await expect(Pushizo.Inbox.markAllRead()).resolves.toBe(0);
+    await Pushizo.Inbox.archive('i1');
     expect(env.native.inboxArchive).toHaveBeenCalledWith('i1');
-    await expect(HeroSignal.Inbox.unreadCount()).resolves.toBe(4);
+    await expect(Pushizo.Inbox.unreadCount()).resolves.toBe(4);
   });
 
   test('Session.sendEvent ve Debug.setLogLevel', () => {
-    const { HeroSignal, LogLevel, env } = load();
-    HeroSignal.Session.sendEvent('purchase', { sku: 'a1' }, 49.9);
-    HeroSignal.Session.sendEvent('viewed');
+    const { Pushizo, LogLevel, env } = load();
+    Pushizo.Session.sendEvent('purchase', { sku: 'a1' }, 49.9);
+    Pushizo.Session.sendEvent('viewed');
     expect(env.native.sendEvent).toHaveBeenNthCalledWith(1, 'purchase', { sku: 'a1' }, 49.9);
     expect(env.native.sendEvent).toHaveBeenNthCalledWith(2, 'viewed', {}, null);
-    expect(() => HeroSignal.Session.sendEvent('x', {}, Number.NaN)).toThrow('value');
-    HeroSignal.Debug.setLogLevel(LogLevel.Info);
+    expect(() => Pushizo.Session.sendEvent('x', {}, Number.NaN)).toThrow('value');
+    Pushizo.Debug.setLogLevel(LogLevel.Info);
     expect(env.native.setLogLevel).toHaveBeenCalledWith('info');
-    expect(() => HeroSignal.Debug.setLogLevel('trace' as never)).toThrow('günlük seviyesi');
+    expect(() => Pushizo.Debug.setLogLevel('trace' as never)).toThrow('günlük seviyesi');
   });
 });

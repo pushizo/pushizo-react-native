@@ -1,4 +1,4 @@
-package com.herosignal.reactnative
+package com.pushizo.reactnative
 
 import android.content.ContentProvider
 import android.content.ContentValues
@@ -7,22 +7,22 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import com.herosignal.sdk.HeroSignal
-import com.herosignal.sdk.HsLog
+import com.pushizo.sdk.Pushizo
+import com.pushizo.sdk.HsLog
 
 /**
- * Erken başlatma: uygulama manifestinde `com.herosignal.reactnative.app_id` meta-data'sı varsa (Expo config plugin
+ * Erken başlatma: uygulama manifestinde `com.pushizo.reactnative.app_id` meta-data'sı varsa (Expo config plugin
  * `appId` verildiğinde ekler) SDK, `Application.onCreate` öncesinde başlatılır. Böylece JS yüklenmeden gelen bildirim
  * tıklamaları, oturum başlangıcı ve in-app Activity takibi kaçmaz. Meta-data yoksa hiçbir şey yapmaz; JS
- * `HeroSignal.initialize` yine tek başına yeterlidir (aynı appId ile ikinci çağrı yerel SDK'da yok sayılır).
+ * `Pushizo.initialize` yine tek başına yeterlidir (aynı appId ile ikinci çağrı yerel SDK'da yok sayılır).
  */
-class HeroSignalInitProvider : ContentProvider() {
+class PushizoInitProvider : ContentProvider() {
     override fun onCreate(): Boolean {
         val ctx = context ?: return false
         val meta = runCatching { metaData(ctx.packageManager, ctx.packageName) }.getOrNull() ?: return false
         val appId = meta.getString(META_APP_ID)?.takeIf { it.isNotBlank() } ?: return false
-        val defaults = HeroSignal.Options()
-        val options = HeroSignal.Options(
+        val defaults = Pushizo.Options()
+        val options = Pushizo.Options(
             apiUrl = text(meta, META_API_URL) ?: defaults.apiUrl,
             // Onay bayrağı SDK başlamadan uygulanmalı; aksi halde JS `initialize` gelene kadar onaysız ağ isteği yapılabilir.
             requiresPrivacyConsent = flag(meta, META_REQUIRES_CONSENT) ?: defaults.requiresPrivacyConsent,
@@ -31,10 +31,10 @@ class HeroSignalInitProvider : ContentProvider() {
             defaultChannelId = text(meta, META_CHANNEL_ID) ?: defaults.defaultChannelId,
         )
         try {
-            HeroSignalBridge.initialize(ctx, appId, options)
+            PushizoBridge.initialize(ctx, appId, options)
         } catch (e: RuntimeException) {
             // Erken başlatma hatası uygulamayı çökertmemeli; JS initialize yeniden dener.
-            HsLog.e("HeroSignal erken başlatma başarısız", e)
+            HsLog.e("Pushizo erken başlatma başarısız", e)
         }
         return true
     }
@@ -65,11 +65,11 @@ class HeroSignalInitProvider : ContentProvider() {
     override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?): Int = 0
 
     companion object {
-        const val META_APP_ID = "com.herosignal.reactnative.app_id"
-        const val META_API_URL = "com.herosignal.reactnative.api_url"
-        const val META_REQUIRES_CONSENT = "com.herosignal.reactnative.requires_privacy_consent"
-        const val META_LOG_LEVEL = "com.herosignal.reactnative.log_level"
-        const val META_CHANNEL_ID = "com.herosignal.reactnative.default_channel_id"
-        const val META_CHANNEL_NAME = "com.herosignal.reactnative.default_channel_name"
+        const val META_APP_ID = "com.pushizo.reactnative.app_id"
+        const val META_API_URL = "com.pushizo.reactnative.api_url"
+        const val META_REQUIRES_CONSENT = "com.pushizo.reactnative.requires_privacy_consent"
+        const val META_LOG_LEVEL = "com.pushizo.reactnative.log_level"
+        const val META_CHANNEL_ID = "com.pushizo.reactnative.default_channel_id"
+        const val META_CHANNEL_NAME = "com.pushizo.reactnative.default_channel_name"
     }
 }
