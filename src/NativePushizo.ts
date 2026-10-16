@@ -1,9 +1,9 @@
 /**
- * HeroSignal yerel modül sözleşmesi (TurboModule / codegen kaynağı).
+ * Pushizo yerel modül sözleşmesi (TurboModule / codegen kaynağı).
  *
  * Bu dosya codegen tarafından okunur (`codegenConfig.jsSrcsDir = src`); yalnızca codegen'in desteklediği tipler
  * kullanılır. Haritalar (`Object`) yerel tarafta `ReadableMap` / `NSDictionary` olarak gelir; codegen `object` veya
- * `Record` kabul etmediğinden bu satırlarda satır bazlı lint istisnası vardır. Eski mimaride aynı metotlar `NativeModules.HeroSignal` üzerinden çağrılır (bkz. `native.ts`).
+ * `Record` kabul etmediğinden bu satırlarda satır bazlı lint istisnası vardır. Eski mimaride aynı metotlar `NativeModules.Pushizo` üzerinden çağrılır (bkz. `native.ts`).
  */
 import type { TurboModule } from 'react-native';
 import { TurboModuleRegistry } from 'react-native';
@@ -90,7 +90,7 @@ export interface Spec extends TurboModule {
   inboxUnreadCount(): Promise<number>;
 
   // --- Live Activities (yalnızca iOS 16.1+; Android `PLATFORM_NOT_SUPPORTED` ile reddeder) ---
-  /** Genel `HeroSignalDefaultLiveActivityAttributes` türünü izlemeye alır (push-to-start ve güncelleme belirteçleri). */
+  /** Genel `PushizoDefaultLiveActivityAttributes` türünü izlemeye alır (push-to-start ve güncelleme belirteçleri). */
   setupDefaultLiveActivity(): Promise<void>;
   /** attributes / contentState: düz nesne; değerler metin, sayı veya mantıksal (JS katmanında doğrulanır). */
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
@@ -112,4 +112,4 @@ export interface Spec extends TurboModule {
   removeListeners(count: number): void;
 }
 
-export default TurboModuleRegistry.get<Spec>('HeroSignal');
+export default TurboModuleRegistry.get<Spec>('Pushizo');

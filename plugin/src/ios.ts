@@ -13,20 +13,20 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { ResolvedProps } from './props';
 
-export const NSE_TARGET = 'HeroSignalNotificationServiceExtension';
+export const NSE_TARGET = 'PushizoNotificationServiceExtension';
 export const NSE_FILES = ['NotificationService.swift', 'Info.plist', `${NSE_TARGET}.entitlements`] as const;
 export const TEMPLATES_DIR = path.resolve(__dirname, '..', 'templates', NSE_TARGET);
 
 /** Yerel SDK ve köprünün okuduğu Info.plist anahtarları. */
 export const PLIST = {
-  appId: 'HeroSignalAppId',
-  apiUrl: 'HeroSignalApiUrl',
-  appGroup: 'HeroSignalAppGroup',
-  requiresConsent: 'HeroSignalRequiresPrivacyConsent',
-  logLevel: 'HeroSignalLogLevel',
+  appId: 'PushizoAppId',
+  apiUrl: 'PushizoApiUrl',
+  appGroup: 'PushizoAppGroup',
+  requiresConsent: 'PushizoRequiresPrivacyConsent',
+  logLevel: 'PushizoLogLevel',
 } as const;
 
-/** iOS SDK `HeroSignal.Location.requestPermission` bu anahtar yoksa izin istemez (false döner). */
+/** iOS SDK `Pushizo.Location.requestPermission` bu anahtar yoksa izin istemez (false döner). */
 export const LOCATION_USAGE_KEY = 'NSLocationWhenInUseUsageDescription';
 
 type Plist = Record<string, unknown>;
@@ -39,14 +39,14 @@ function stringArray(value: unknown): string[] {
 function requireBundleId(config: ExpoConfig): string {
   const bundleId = config.ios?.bundleIdentifier;
   if (!bundleId) {
-    throw new Error('@herosignal/react-native config plugin: app.json → "ios.bundleIdentifier" gerekli (App Group ve NSE kimliği için).');
+    throw new Error('@pushizo/react-native config plugin: app.json → "ios.bundleIdentifier" gerekli (App Group ve NSE kimliği için).');
   }
   return bundleId;
 }
 
-/** SDK kuralı: App Group verilmezse `group.<bundle id>.herosignal`. */
+/** SDK kuralı: App Group verilmezse `group.<bundle id>.pushizo`. */
 export function resolveAppGroup(props: ResolvedProps, bundleId: string): string {
-  return props.iosAppGroup ?? `group.${bundleId}.herosignal`;
+  return props.iosAppGroup ?? `group.${bundleId}.pushizo`;
 }
 
 export function applyEntitlements<T extends object>(entitlements: T, props: ResolvedProps, appGroup: string): T {
@@ -78,24 +78,24 @@ export function applyInfoPlist<T extends object>(infoPlist: T, props: ResolvedPr
   return infoPlist;
 }
 
-const SWIFT_EXPO_METHODS = `  // APNs token'ı HeroSignal'e iletilir (SDK swizzling kullanmaz).
+const SWIFT_EXPO_METHODS = `  // APNs token'ı Pushizo'ya iletilir (SDK swizzling kullanmaz).
   public override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-    HeroSignal.setDeviceToken(deviceToken)
+    Pushizo.setDeviceToken(deviceToken)
     super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
   }
 
   public override func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-    HeroSignal.setDeviceTokenError(error)
+    Pushizo.setDeviceTokenError(error)
     super.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
   }`;
 
-const SWIFT_PLAIN_METHODS = `  // APNs token'ı HeroSignal'e iletilir (SDK swizzling kullanmaz).
+const SWIFT_PLAIN_METHODS = `  // APNs token'ı Pushizo'ya iletilir (SDK swizzling kullanmaz).
   func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-    HeroSignal.setDeviceToken(deviceToken)
+    Pushizo.setDeviceToken(deviceToken)
   }
 
   func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-    HeroSignal.setDeviceTokenError(error)
+    Pushizo.setDeviceTokenError(error)
   }`;
 
 /**
@@ -106,27 +106,27 @@ export function applyAppDelegate(contents: string, language: string): string {
   if (language === 'swift') {
     let src = CodeGenerator.mergeContents({
       src: contents,
-      newSrc: 'import HeroSignal',
-      tag: 'herosignal-import',
+      newSrc: 'import Pushizo',
+      tag: 'pushizo-import',
       anchor: /^import /m,
       offset: 0,
       comment: '//',
     }).contents;
-    const withoutOurs = CodeGenerator.removeGeneratedContents(src, 'herosignal-apns') ?? src;
+    const withoutOurs = CodeGenerator.removeGeneratedContents(src, 'pushizo-apns') ?? src;
     if (/didRegisterForRemoteNotificationsWithDeviceToken/.test(withoutOurs)) {
       throw new Error(
-        "@herosignal/react-native config plugin: AppDelegate zaten didRegisterForRemoteNotificationsWithDeviceToken tanımlıyor. Bu metoda `HeroSignal.setDeviceToken(deviceToken)` satırını elle ekleyin.",
+        "@pushizo/react-native config plugin: AppDelegate zaten didRegisterForRemoteNotificationsWithDeviceToken tanımlıyor. Bu metoda `Pushizo.setDeviceToken(deviceToken)` satırını elle ekleyin.",
       );
     }
     const isExpo = /class\s+AppDelegate\s*:\s*ExpoAppDelegate/.test(src);
     const classLine = /^(public\s+)?class\s+AppDelegate\b[^{]*\{/m;
     if (!classLine.test(src)) {
-      throw new Error('@herosignal/react-native config plugin: AppDelegate.swift içinde "class AppDelegate" bulunamadı.');
+      throw new Error('@pushizo/react-native config plugin: AppDelegate.swift içinde "class AppDelegate" bulunamadı.');
     }
     src = CodeGenerator.mergeContents({
       src,
       newSrc: isExpo ? SWIFT_EXPO_METHODS : SWIFT_PLAIN_METHODS,
-      tag: 'herosignal-apns',
+      tag: 'pushizo-apns',
       anchor: classLine,
       offset: 1,
       comment: '//',
@@ -137,34 +137,34 @@ export function applyAppDelegate(contents: string, language: string): string {
   if (language === 'objc' || language === 'objcpp') {
     let src = CodeGenerator.mergeContents({
       src: contents,
-      newSrc: '#import <HeroSignalReactNative/HeroSignalRNPush.h>',
-      tag: 'herosignal-import',
+      newSrc: '#import <PushizoReactNative/PushizoRNPush.h>',
+      tag: 'pushizo-import',
       anchor: /#import "AppDelegate.h"/,
       offset: 1,
       comment: '//',
     }).contents;
-    src = insertIntoObjcMethod(src, 'didRegisterForRemoteNotificationsWithDeviceToken:', 'herosignal-apns-token',
-      '  [HeroSignalRNPush didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];',
+    src = insertIntoObjcMethod(src, 'didRegisterForRemoteNotificationsWithDeviceToken:', 'pushizo-apns-token',
+      '  [PushizoRNPush didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];',
       [
         '- (void)application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken',
         '{',
-        '  [HeroSignalRNPush didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];',
+        '  [PushizoRNPush didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];',
         '  [super application:application didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];',
         '}',
       ].join('\n'));
-    src = insertIntoObjcMethod(src, 'didFailToRegisterForRemoteNotificationsWithError:', 'herosignal-apns-error',
-      '  [HeroSignalRNPush didFailToRegisterForRemoteNotificationsWithError:error];',
+    src = insertIntoObjcMethod(src, 'didFailToRegisterForRemoteNotificationsWithError:', 'pushizo-apns-error',
+      '  [PushizoRNPush didFailToRegisterForRemoteNotificationsWithError:error];',
       [
         '- (void)application:(UIApplication *)application didFailToRegisterForRemoteNotificationsWithError:(NSError *)error',
         '{',
-        '  [HeroSignalRNPush didFailToRegisterForRemoteNotificationsWithError:error];',
+        '  [PushizoRNPush didFailToRegisterForRemoteNotificationsWithError:error];',
         '  [super application:application didFailToRegisterForRemoteNotificationsWithError:error];',
         '}',
       ].join('\n'));
     return src;
   }
 
-  throw new Error(`@herosignal/react-native config plugin: desteklenmeyen AppDelegate dili: ${language}`);
+  throw new Error(`@pushizo/react-native config plugin: desteklenmeyen AppDelegate dili: ${language}`);
 }
 
 /**
@@ -178,36 +178,36 @@ function insertIntoObjcMethod(src: string, selectorPart: string, tag: string, li
   const signature = lines.findIndex((l) => /^-\s*\(void\)\s*application:/.test(l) && l.includes(selectorPart));
   if (signature >= 0) {
     const brace = lines.findIndex((l, i) => i >= signature && l.includes('{'));
-    if (brace < 0) throw new Error(`@herosignal/react-native config plugin: AppDelegate ${selectorPart} gövdesi bulunamadı.`);
+    if (brace < 0) throw new Error(`@pushizo/react-native config plugin: AppDelegate ${selectorPart} gövdesi bulunamadı.`);
     lines.splice(brace + 1, 0, ...wrap(line));
     return lines.join('\n');
   }
   const end = lines.map((l) => l.trim()).lastIndexOf('@end');
-  if (end < 0) throw new Error('@herosignal/react-native config plugin: AppDelegate içinde @end bulunamadı.');
+  if (end < 0) throw new Error('@pushizo/react-native config plugin: AppDelegate içinde @end bulunamadı.');
   lines.splice(end, 0, ...wrap(method));
   return lines.join('\n');
 }
 
-/** Podfile: NSE hedefi (HeroSignal/Extension) ve isteğe bağlı monorepo `:path`. */
+/** Podfile: NSE hedefi (Pushizo/Extension) ve isteğe bağlı monorepo `:path`. */
 export function applyPodfile(contents: string, props: ResolvedProps): string {
   let src = contents;
   const source = props.iosSdkPath ? `, :path => '${props.iosSdkPath}'` : `, '~> 0.1'`;
   if (props.iosSdkPath) {
     src = CodeGenerator.mergeContents({
       src,
-      newSrc: `  pod 'HeroSignal'${source}`,
-      tag: 'herosignal-sdk',
+      newSrc: `  pod 'Pushizo'${source}`,
+      tag: 'pushizo-sdk',
       anchor: /use_native_modules!|use_expo_modules!/,
       offset: 1,
       comment: '#',
     }).contents;
   }
   if (props.iosNotificationServiceExtension) {
-    const block = [`target '${NSE_TARGET}' do`, `  pod 'HeroSignal/Extension'${source}`, 'end'].join('\n');
-    const removed = CodeGenerator.removeGeneratedContents(src, 'herosignal-nse') ?? src;
-    src = `${removed.trimEnd()}\n\n# @generated begin herosignal-nse - expo prebuild (DO NOT MODIFY)\n${block}\n# @generated end herosignal-nse\n`;
+    const block = [`target '${NSE_TARGET}' do`, `  pod 'Pushizo/Extension'${source}`, 'end'].join('\n');
+    const removed = CodeGenerator.removeGeneratedContents(src, 'pushizo-nse') ?? src;
+    src = `${removed.trimEnd()}\n\n# @generated begin pushizo-nse - expo prebuild (DO NOT MODIFY)\n${block}\n# @generated end pushizo-nse\n`;
   } else {
-    src = CodeGenerator.removeGeneratedContents(src, 'herosignal-nse') ?? src;
+    src = CodeGenerator.removeGeneratedContents(src, 'pushizo-nse') ?? src;
   }
   return src;
 }
@@ -216,14 +216,14 @@ function escapeXml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/** NSE Info.plist: şablon + HeroSignal anahtarları. */
+/** NSE Info.plist: şablon + Pushizo anahtarları. */
 export function buildNseInfoPlist(template: string, props: ResolvedProps, appGroup: string): string {
   const entries: [string, string][] = [[PLIST.appId, props.appId ?? '']];
   if (props.apiUrl) entries.push([PLIST.apiUrl, props.apiUrl]);
   entries.push([PLIST.appGroup, appGroup]);
   const keys = entries.map(([k, v]) => `\t<key>${k}</key>\n\t<string>${escapeXml(v)}</string>`).join('\n');
   const end = template.lastIndexOf('</dict>');
-  if (end < 0) throw new Error('@herosignal/react-native config plugin: NSE Info.plist şablonu bozuk.');
+  if (end < 0) throw new Error('@pushizo/react-native config plugin: NSE Info.plist şablonu bozuk.');
   return `${template.slice(0, end)}${keys}\n${template.slice(end)}`;
 }
 
@@ -243,7 +243,7 @@ export function buildNseEntitlements(appGroup: string): string {
   ].join('\n');
 }
 
-/** NSE dosyalarını `ios/HeroSignalNotificationServiceExtension/` altına yazar. */
+/** NSE dosyalarını `ios/PushizoNotificationServiceExtension/` altına yazar. */
 export function writeNseFiles(platformProjectRoot: string, props: ResolvedProps, appGroup: string): void {
   const dir = path.join(platformProjectRoot, NSE_TARGET);
   fs.mkdirSync(dir, { recursive: true });
@@ -297,7 +297,7 @@ export function addNseTarget(
   return project;
 }
 
-export const withHeroSignalIos: ConfigPlugin<ResolvedProps> = (config, props) => {
+export const withPushizoIos: ConfigPlugin<ResolvedProps> = (config, props) => {
   const bundleId = requireBundleId(config);
   const appGroup = resolveAppGroup(props, bundleId);
 

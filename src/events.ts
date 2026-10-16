@@ -24,7 +24,7 @@ export class EventHub<TNative, TPublic = TNative> {
   }
 
   add(listener: Listener<TPublic>): void {
-    if (typeof listener !== 'function') throw new TypeError('HeroSignal: dinleyici bir fonksiyon olmalı.');
+    if (typeof listener !== 'function') throw new TypeError('Pushizo: dinleyici bir fonksiyon olmalı.');
     if (this.listeners.has(listener)) return;
     const wasActive = this.active;
     this.listeners.add(listener);
@@ -70,7 +70,7 @@ export class EventHub<TNative, TPublic = TNative> {
         listener(event);
       } catch (error) {
         // Uygulama dinleyicisinin hatası SDK akışını (ör. ön plan gösterim kararı) bozmamalı.
-        console.error(`[HeroSignal] '${this.eventName}' dinleyicisi hata verdi`, error);
+        console.error(`[Pushizo] '${this.eventName}' dinleyicisi hata verdi`, error);
       }
     }
     this.hooks.onEvent?.(event);

@@ -14,20 +14,20 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { ResolvedProps } from './props';
 
-export const PLUGIN_NAME = '@herosignal/react-native';
-export const ICON_RESOURCE = 'herosignal_notification_icon';
-export const COLOR_RESOURCE = 'herosignal_notification_color';
+export const PLUGIN_NAME = '@pushizo/react-native';
+export const ICON_RESOURCE = 'pushizo_notification_icon';
+export const COLOR_RESOURCE = 'pushizo_notification_color';
 
 /** Yerel SDK ve köprünün okuduğu manifest meta-data anahtarları. */
 export const META = {
-  icon: 'com.herosignal.sdk.default_notification_icon',
-  color: 'com.herosignal.sdk.default_notification_color',
-  appId: 'com.herosignal.reactnative.app_id',
-  apiUrl: 'com.herosignal.reactnative.api_url',
-  requiresConsent: 'com.herosignal.reactnative.requires_privacy_consent',
-  logLevel: 'com.herosignal.reactnative.log_level',
-  channelId: 'com.herosignal.reactnative.default_channel_id',
-  channelName: 'com.herosignal.reactnative.default_channel_name',
+  icon: 'com.pushizo.sdk.default_notification_icon',
+  color: 'com.pushizo.sdk.default_notification_color',
+  appId: 'com.pushizo.reactnative.app_id',
+  apiUrl: 'com.pushizo.reactnative.api_url',
+  requiresConsent: 'com.pushizo.reactnative.requires_privacy_consent',
+  logLevel: 'com.pushizo.reactnative.log_level',
+  channelId: 'com.pushizo.reactnative.default_channel_id',
+  channelName: 'com.pushizo.reactnative.default_channel_name',
 } as const;
 
 /** Android bildirim küçük ikonu boyutları (dp 24 → px). */
@@ -83,23 +83,23 @@ export function applyAndroidManifest(manifest: AndroidManifest, props: ResolvedP
   return manifest;
 }
 
-/** Monorepo: `:herosignal` modülünü settings.gradle'a ekler (köprü build.gradle'ı bu modülü kaynaktan kullanır). */
+/** Monorepo: `:pushizo` modülünü settings.gradle'a ekler (köprü build.gradle'ı bu modülü kaynaktan kullanır). */
 export function applySettingsGradle(contents: string, sdkPath: string): string {
   const newSrc = [
-    "include ':herosignal'",
-    `project(':herosignal').projectDir = new File(rootProject.projectDir, '${sdkPath.replace(/\\/g, '/')}')`,
+    "include ':pushizo'",
+    `project(':pushizo').projectDir = new File(rootProject.projectDir, '${sdkPath.replace(/\\/g, '/')}')`,
   ].join('\n');
   return CodeGenerator.mergeContents({
     src: contents,
     newSrc,
-    tag: 'herosignal-android-sdk',
+    tag: 'pushizo-android-sdk',
     anchor: /include ':app'/,
     offset: 1,
     comment: '//',
   }).contents;
 }
 
-/** Küçük ikonu tüm yoğunluklar için `res/drawable-<yoğunluk>/herosignal_notification_icon.png` olarak üretir. */
+/** Küçük ikonu tüm yoğunluklar için `res/drawable-<yoğunluk>/pushizo_notification_icon.png` olarak üretir. */
 export async function writeNotificationIcons(projectRoot: string, platformProjectRoot: string, src: string): Promise<void> {
   const source = path.resolve(projectRoot, src);
   if (!fs.existsSync(source)) {
@@ -108,7 +108,7 @@ export async function writeNotificationIcons(projectRoot: string, platformProjec
   const resDir = path.join(platformProjectRoot, 'app', 'src', 'main', 'res');
   for (const [density, size] of Object.entries(ICON_SIZES)) {
     const { source: png } = await generateImageAsync(
-      { projectRoot, cacheType: 'herosignal-notification-icon' },
+      { projectRoot, cacheType: 'pushizo-notification-icon' },
       { src: source, width: size, height: size, resizeMode: 'cover', backgroundColor: 'transparent' },
     );
     const dir = path.join(resDir, `drawable-${density}`);
@@ -132,11 +132,11 @@ export async function copyGoogleServicesFile(config: Pick<ExpoConfig, 'android'>
   return path.join(projectRoot, 'android', 'app', 'google-services.json');
 }
 
-export const withHeroSignalAndroid: ConfigPlugin<ResolvedProps> = (config, props) => {
+export const withPushizoAndroid: ConfigPlugin<ResolvedProps> = (config, props) => {
   if (!config.android?.googleServicesFile) {
     WarningAggregator.addWarningAndroid(
       PLUGIN_NAME,
-      'FCM için google-services.json gerekli: Firebase konsolundan indirip app.json → "android.googleServicesFile" alanına yolunu yazın (ör. "./google-services.json"). Ardından FCM v1 servis hesabı JSON dosyasını HeroSignal panelinde Android kimlik bilgisi olarak yükleyin.',
+      'FCM için google-services.json gerekli: Firebase konsolundan indirip app.json → "android.googleServicesFile" alanına yolunu yazın (ör. "./google-services.json"). Ardından FCM v1 servis hesabı JSON dosyasını Pushizo panelinde Android kimlik bilgisi olarak yükleyin.',
     );
   } else {
     // Expo prebuild aynı adımları varsayılan eklentilerinde de uygular; buradaki çağrılar idempotenttir (sınıf yolu ve

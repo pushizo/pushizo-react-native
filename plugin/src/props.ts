@@ -4,21 +4,21 @@ export type ApnsMode = 'development' | 'production';
 export type PluginLogLevel = 'none' | 'error' | 'warn' | 'info' | 'debug';
 export type AndroidLocationPermission = 'coarse' | 'fine';
 
-export interface HeroSignalPluginProps {
+export interface PushizoPluginProps {
   /** APNs ortamı → `aps-environment` yetkisi (zorunlu). Mağaza/TestFlight derlemesi için `production`. */
   mode: ApnsMode;
   /**
-   * HeroSignal app kimliği. Verilirse SDK uygulama açılışında (JS yüklenmeden) başlatılır ve Notification Service Extension
+   * Pushizo app kimliği. Verilirse SDK uygulama açılışında (JS yüklenmeden) başlatılır ve Notification Service Extension
    * bu kimlikle `received` bildirir. NSE açıkken zorunludur.
    */
   appId?: string;
-  /** Kendi barındırma için API adresi (varsayılan `https://api.herosignal.dev`). */
+  /** Kendi barındırma için API adresi (varsayılan `https://api.pushizo.com`). */
   apiUrl?: string;
   /** Erken başlatmada KVKK/GDPR onayı bekle (JS `initialize` seçeneğiyle aynı olmalı). */
   requiresPrivacyConsent?: boolean;
   /** Erken başlatma günlük seviyesi. */
   logLevel?: PluginLogLevel;
-  /** iOS App Group; varsayılan `group.<bundle id>.herosignal` (SDK kuralı). */
+  /** iOS App Group; varsayılan `group.<bundle id>.pushizo` (SDK kuralı). */
   iosAppGroup?: string;
   /** Notification Service Extension hedefi eklensin mi (zengin medya, rozet, confirmed delivery). Varsayılan true. */
   iosNotificationServiceExtension?: boolean;
@@ -28,7 +28,7 @@ export interface HeroSignalPluginProps {
   devTeam?: string;
   /** Monorepo / yerel geliştirme: `sdk/ios` dizini (projeye göre). Verilirse Podfile'a `:path` ile eklenir. */
   iosSdkPath?: string;
-  /** Monorepo / yerel geliştirme: `sdk/android/herosignal` modül dizini (android/ klasörüne göre). */
+  /** Monorepo / yerel geliştirme: `sdk/android/pushizo` modül dizini (android/ klasörüne göre). */
   androidSdkPath?: string;
   /** Bildirim küçük ikonu kaynağı (PNG, beyaz + saydam önerilir); tüm yoğunluklar için üretilir. */
   androidSmallIcon?: string;
@@ -39,7 +39,7 @@ export interface HeroSignalPluginProps {
   /** Erken başlatmada varsayılan Android bildirim kanalının kullanıcıya görünen adı (JS `defaultChannelName`). */
   androidDefaultChannelName?: string;
   /**
-   * Konum paylaşımı (`HeroSignal.Location`) için iOS "kullanırken" izin açıklaması → Info.plist
+   * Konum paylaşımı (`Pushizo.Location`) için iOS "kullanırken" izin açıklaması → Info.plist
    * `NSLocationWhenInUseUsageDescription`. Verilmezse Info.plist'e dokunulmaz (uygulama `ios.infoPlist` ile ekleyebilir).
    */
   iosLocationUsageDescription?: string;
@@ -50,12 +50,12 @@ export interface HeroSignalPluginProps {
   androidLocationPermission?: AndroidLocationPermission;
 }
 
-export interface ResolvedProps extends HeroSignalPluginProps {
+export interface ResolvedProps extends PushizoPluginProps {
   iosNotificationServiceExtension: boolean;
   iosDeploymentTarget: string;
 }
 
-const KNOWN_KEYS = new Set<keyof HeroSignalPluginProps>([
+const KNOWN_KEYS = new Set<keyof PushizoPluginProps>([
   'mode',
   'appId',
   'apiUrl',
@@ -75,7 +75,7 @@ const KNOWN_KEYS = new Set<keyof HeroSignalPluginProps>([
   'androidLocationPermission',
 ]);
 
-const PREFIX = '@herosignal/react-native config plugin';
+const PREFIX = '@pushizo/react-native config plugin';
 const LOG_LEVELS: PluginLogLevel[] = ['none', 'error', 'warn', 'info', 'debug'];
 
 function fail(message: string): never {
@@ -97,13 +97,13 @@ function optionalBoolean(props: Record<string, unknown>, key: string): void {
 /** Seçenekleri doğrular; hatalar hangi alanın nasıl düzeltileceğini söyler. */
 export function validateProps(input: unknown): ResolvedProps {
   if (input === undefined || input === null) {
-    fail('seçenekler gerekli. Örnek: ["@herosignal/react-native", { "mode": "development", "appId": "app_…" }]');
+    fail('seçenekler gerekli. Örnek: ["@pushizo/react-native", { "mode": "development", "appId": "app_…" }]');
   }
   if (typeof input !== 'object' || Array.isArray(input)) fail('seçenekler bir nesne olmalı.');
   const props = input as Record<string, unknown>;
 
   for (const key of Object.keys(props)) {
-    if (!KNOWN_KEYS.has(key as keyof HeroSignalPluginProps)) {
+    if (!KNOWN_KEYS.has(key as keyof PushizoPluginProps)) {
       fail(`bilinmeyen seçenek "${key}". Geçerli seçenekler: ${Array.from(KNOWN_KEYS).join(', ')}.`);
     }
   }
@@ -138,7 +138,7 @@ export function validateProps(input: unknown): ResolvedProps {
     fail('"androidAccentColor" #RRGGBB biçiminde olmalı (ör. "#FF5A1F").');
   }
   if (props.androidDefaultChannelId !== undefined && !/^[A-Za-z0-9._-]{1,100}$/.test(props.androidDefaultChannelId as string)) {
-    fail('"androidDefaultChannelId" yalnızca harf, rakam, nokta, alt çizgi ve tire içermeli (en çok 100 karakter, ör. "herosignal_default").');
+    fail('"androidDefaultChannelId" yalnızca harf, rakam, nokta, alt çizgi ve tire içermeli (en çok 100 karakter, ör. "pushizo_default").');
   }
   if (props.androidLocationPermission !== undefined && props.androidLocationPermission !== 'coarse' && props.androidLocationPermission !== 'fine') {
     fail('"androidLocationPermission" "coarse" (yaklaşık konum) ya da "fine" (hassas konum) olmalı.');
@@ -153,7 +153,7 @@ export function validateProps(input: unknown): ResolvedProps {
   }
 
   return {
-    ...(props as unknown as HeroSignalPluginProps),
+    ...(props as unknown as PushizoPluginProps),
     iosNotificationServiceExtension: nse,
     iosDeploymentTarget: (props.iosDeploymentTarget as string | undefined) ?? '15.0',
   };

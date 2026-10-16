@@ -1,19 +1,19 @@
-# @herosignal/react-native
+# @pushizo/react-native
 
-HeroSignal React Native SDK'sı: Android (`com.herosignal.sdk`) ve iOS (`HeroSignal`) yerel SDK'larını saran köprü ve
+Pushizo React Native SDK'sı: Android (`com.pushizo.sdk`) ve iOS (`Pushizo`) yerel SDK'larını saran köprü ve
 Expo config plugin. Push aboneliği, kullanıcı/tag/alias, e-posta/SMS, bildirim tercihleri, in-app mesajlar, bildirim
 kutusu ve olaylar.
 Yüzey plan 06 §6.1 ile ve eski sağlayıcı v5 React Native API'si ile uyumludur; kuyruk, oturum, teslimat geri bildirimi
 (received/opened) ve in-app çizimi yerel SDK'dadır.
 
-- React Native ≥ 0.74; **New Architecture** (TurboModule, codegen `RNHeroSignalSpec`) ve eski mimari desteklenir.
+- React Native ≥ 0.74; **New Architecture** (TurboModule, codegen `RNPushizoSpec`) ve eski mimari desteklenir.
 - Android minSdk 24, iOS 15.0+.
 - Expo: development build (`expo prebuild` / EAS Build). Expo Go yerel modül içermediği için desteklenmez.
 
 ## Kurulum
 
 ```sh
-npm install @herosignal/react-native
+npm install @pushizo/react-native
 ```
 
 ### Bare React Native
@@ -23,44 +23,44 @@ npm install @herosignal/react-native
 1. Firebase konsolundan Android uygulaması ekleyip `google-services.json` dosyasını `android/app/` içine koyun.
 2. `android/build.gradle` → `buildscript.dependencies` içine `classpath("com.google.gms:google-services:4.4.2")`,
    `android/app/build.gradle` içine `apply plugin: "com.google.gms.google-services"` ekleyin.
-3. HeroSignal paneli → Kanallar → Android: FCM v1 servis hesabı JSON'unu yükleyin.
+3. Pushizo paneli → Kanallar → Android: FCM v1 servis hesabı JSON'unu yükleyin.
 4. `POST_NOTIFICATIONS` izni ve FCM servisi yerel SDK manifestinden otomatik birleşir.
 5. (İsteğe bağlı) Varsayılan bildirim ikonu: `AndroidManifest.xml` → `<application>` içine
-   `<meta-data android:name="com.herosignal.sdk.default_notification_icon" android:resource="@drawable/ic_notification" />`.
+   `<meta-data android:name="com.pushizo.sdk.default_notification_icon" android:resource="@drawable/ic_notification" />`.
 
 Monorepo / yerel geliştirmede SDK kaynaktan bağlanabilir (`android/settings.gradle`):
 
 ```groovy
-include ':herosignal'
-project(':herosignal').projectDir = new File(rootProject.projectDir, '../../../sdk/android/herosignal')
+include ':pushizo'
+project(':pushizo').projectDir = new File(rootProject.projectDir, '../../../sdk/android/pushizo')
 ```
 
-Bu modül yoksa köprü `com.herosignal:herosignal-android` artefaktını kullanır (Maven Central ya da `publishToMavenLocal`).
+Bu modül yoksa köprü `com.pushizo:pushizo-android` artefaktını kullanır (Maven Central ya da `publishToMavenLocal`).
 
 **iOS**
 
 1. `ios/Podfile` (yalnızca yerel geliştirmede; yayınlanmış pod CocoaPods trunk'tan gelir):
-   `pod 'HeroSignal', :path => '<repo>/sdk/ios'` → `cd ios && pod install`.
+   `pod 'Pushizo', :path => '<repo>/sdk/ios'` → `cd ios && pod install`.
 2. Xcode → hedef → Signing & Capabilities: **Push Notifications**, **Background Modes → Remote notifications** ve
-   (rozet/NSE paylaşımı için) **App Groups** (`group.<bundle id>.herosignal`) ekleyin.
+   (rozet/NSE paylaşımı için) **App Groups** (`group.<bundle id>.pushizo`) ekleyin.
 3. APNs token'ını iletin (SDK swizzling kullanmaz). Swift `AppDelegate`:
 
    ```swift
-   import HeroSignal
+   import Pushizo
 
    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-     HeroSignal.setDeviceToken(deviceToken)
+     Pushizo.setDeviceToken(deviceToken)
    }
 
    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-     HeroSignal.setDeviceTokenError(error)
+     Pushizo.setDeviceTokenError(error)
    }
    ```
 
-   Objective-C `AppDelegate.mm`: `#import <HeroSignalReactNative/HeroSignalRNPush.h>` ve ilgili metotlarda
-   `[HeroSignalRNPush didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];` /
-   `[HeroSignalRNPush didFailToRegisterForRemoteNotificationsWithError:error];`.
-4. HeroSignal paneli → Kanallar → iOS: APNs `.p8` anahtarını, Key ID ve Team ID ile yükleyin.
+   Objective-C `AppDelegate.mm`: `#import <PushizoReactNative/PushizoRNPush.h>` ve ilgili metotlarda
+   `[PushizoRNPush didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];` /
+   `[PushizoRNPush didFailToRegisterForRemoteNotificationsWithError:error];`.
+4. Pushizo paneli → Kanallar → iOS: APNs `.p8` anahtarını, Key ID ve Team ID ile yükleyin.
 
 ### Expo
 
@@ -73,7 +73,7 @@ Bu modül yoksa köprü `com.herosignal:herosignal-android` artefaktını kullan
     "android": { "package": "com.example.app", "googleServicesFile": "./google-services.json" },
     "plugins": [
       [
-        "@herosignal/react-native",
+        "@pushizo/react-native",
         {
           "mode": "development",
           "appId": "app_…",
@@ -90,8 +90,8 @@ Ardından `npx expo prebuild` (veya EAS Build). Plugin şunları yapar:
 
 | Platform | Değişiklik |
 |----------|------------|
-| iOS | `aps-environment` (`mode`: `development` / `production`), Background Modes → `remote-notification`, App Group (`iosAppGroup`, varsayılan `group.<bundle id>.herosignal`), AppDelegate'e APNs token iletimi, Info.plist `HeroSignalAppId` / `HeroSignalApiUrl` / `HeroSignalAppGroup` / `HeroSignalRequiresPrivacyConsent` / `HeroSignalLogLevel` (erken başlatma bunları JS yüklenmeden uygular) |
-| iOS | `HeroSignalNotificationServiceExtension` hedefi (dosyalar `plugin/templates`), Podfile'a `HeroSignal/Extension` |
+| iOS | `aps-environment` (`mode`: `development` / `production`), Background Modes → `remote-notification`, App Group (`iosAppGroup`, varsayılan `group.<bundle id>.pushizo`), AppDelegate'e APNs token iletimi, Info.plist `PushizoAppId` / `PushizoApiUrl` / `PushizoAppGroup` / `PushizoRequiresPrivacyConsent` / `PushizoLogLevel` (erken başlatma bunları JS yüklenmeden uygular) |
+| iOS | `PushizoNotificationServiceExtension` hedefi (dosyalar `plugin/templates`), Podfile'a `Pushizo/Extension` |
 | Android | `POST_NOTIFICATIONS`, küçük ikon (PNG'den tüm yoğunluklar), vurgu rengi, erken başlatma meta-data'sı (onay, günlük seviyesi, varsayılan kanal) |
 | Android | `android.googleServicesFile` verilmişse dosyayı `android/app/google-services.json` olarak kopyalar, `com.google.gms:google-services` sınıf yolunu ve `com.google.gms.google-services` Gradle eklentisini ekler (idempotent; Expo'nun kendi adımıyla çakışmaz). Dosya yoksa prebuild açık hatayla durur; alan hiç verilmemişse uyarı verilir. |
 
@@ -118,52 +118,52 @@ Geçersiz seçenekler `prebuild` sırasında hangi alanın nasıl düzeltileceğ
 ## Kullanım
 
 ```ts
-import { HeroSignal, LogLevel } from '@herosignal/react-native';
+import { Pushizo, LogLevel } from '@pushizo/react-native';
 
-await HeroSignal.initialize('app_…', { apiUrl: 'https://api.example.com', logLevel: LogLevel.Warn });
-await HeroSignal.Notifications.requestPermission();
+await Pushizo.initialize('app_…', { apiUrl: 'https://api.example.com', logLevel: LogLevel.Warn });
+await Pushizo.Notifications.requestPermission();
 
-await HeroSignal.login('user_42', identityHashFromBackend); // identity verification açıksa hash zorunlu
-await HeroSignal.User.addTags({ plan: 'pro', city: 'istanbul' });
-await HeroSignal.User.addAlias('crm_id', '1001');
-await HeroSignal.User.addEmail('ali@example.com');      // geçersizse INVALID_ARGUMENT
-await HeroSignal.User.addSms('+90 532 123 45 67');      // E.164'e normalize edilir
-await HeroSignal.User.setLanguage('tr');
+await Pushizo.login('user_42', identityHashFromBackend); // identity verification açıksa hash zorunlu
+await Pushizo.User.addTags({ plan: 'pro', city: 'istanbul' });
+await Pushizo.User.addAlias('crm_id', '1001');
+await Pushizo.User.addEmail('ali@example.com');      // geçersizse INVALID_ARGUMENT
+await Pushizo.User.addSms('+90 532 123 45 67');      // E.164'e normalize edilir
+await Pushizo.User.setLanguage('tr');
 
 // Bildirim tercihleri (kategori × kanal; abonelik kaydı gerekir, yoksa NOT_READY)
-const { preferences, categories } = await HeroSignal.User.getPreferences();
-await HeroSignal.User.setPreferences([
+const { preferences, categories } = await Pushizo.User.getPreferences();
+await Pushizo.User.setPreferences([
   { category: 'promo', optedIn: false },                   // channel yok/null = tüm kanallar
   { category: 'news', channel: 'email', optedIn: true },  // ios_push | android_push | web_push | email | sms
 ]);
 
-HeroSignal.Notifications.addEventListener('click', (e) => {
+Pushizo.Notifications.addEventListener('click', (e) => {
   console.log(e.notification.title, e.result.actionId, e.result.url);
 });
-HeroSignal.Notifications.addEventListener('foregroundWillDisplay', (e) => {
+Pushizo.Notifications.addEventListener('foregroundWillDisplay', (e) => {
   if (e.getNotification().data.silent === '1') e.preventDefault(); // ön planda gösterme
   // asenkron karar: e.preventDefault(); sonra (≤25 sn) e.getNotification().display();
 });
-HeroSignal.Notifications.addEventListener('permissionChange', ({ permission }) => {});
-HeroSignal.User.pushSubscription.addEventListener('change', ({ previous, current }) => {});
+Pushizo.Notifications.addEventListener('permissionChange', ({ permission }) => {});
+Pushizo.User.pushSubscription.addEventListener('change', ({ previous, current }) => {});
 
-await HeroSignal.InAppMessages.addTrigger('level', 'gold');
-HeroSignal.InAppMessages.setScreen('cart');
-HeroSignal.InAppMessages.addEventListener('click', ({ messageId, actionId, url }) => {});
-HeroSignal.InAppMessages.addEventListener('didDisplay', ({ messageId }) => {});
+await Pushizo.InAppMessages.addTrigger('level', 'gold');
+Pushizo.InAppMessages.setScreen('cart');
+Pushizo.InAppMessages.addEventListener('click', ({ messageId, actionId, url }) => {});
+Pushizo.InAppMessages.addEventListener('didDisplay', ({ messageId }) => {});
 
-const page = await HeroSignal.Inbox.list({ limit: 20 });
-await HeroSignal.Inbox.markRead(page.items[0].id);
-await HeroSignal.Inbox.markAllRead();
-await HeroSignal.Inbox.archive(page.items[0].id);
+const page = await Pushizo.Inbox.list({ limit: 20 });
+await Pushizo.Inbox.markRead(page.items[0].id);
+await Pushizo.Inbox.markAllRead();
+await Pushizo.Inbox.archive(page.items[0].id);
 
-HeroSignal.Session.sendEvent('purchase', { sku: 'A1' }, 49.9);
-HeroSignal.Notifications.clearAll();
-await HeroSignal.Notifications.removeGroupedNotifications('orders'); // Android android_group / iOS thread-id
-await HeroSignal.Notifications.removeNotification(id);              // Android: notification.androidNotificationId; iOS: UNNotificationRequest.identifier
-const emails = await HeroSignal.User.getEmails();                    // bu cihazda kayıtlı adresler; getSmsNumbers() aynı biçimde
-HeroSignal.Debug.setLogLevel(LogLevel.Debug);
-HeroSignal.logout();
+Pushizo.Session.sendEvent('purchase', { sku: 'A1' }, 49.9);
+Pushizo.Notifications.clearAll();
+await Pushizo.Notifications.removeGroupedNotifications('orders'); // Android android_group / iOS thread-id
+await Pushizo.Notifications.removeNotification(id);              // Android: notification.androidNotificationId; iOS: UNNotificationRequest.identifier
+const emails = await Pushizo.User.getEmails();                    // bu cihazda kayıtlı adresler; getSmsNumbers() aynı biçimde
+Pushizo.Debug.setLogLevel(LogLevel.Debug);
+Pushizo.logout();
 ```
 
 ### JWT ile kimlik doğrulama
@@ -172,10 +172,10 @@ App ayarlarında kimlik doğrulama kipi (`identity_verification_mode`) `jwt` vey
 imzalanmış kısa ömürlü bir ES256 JWT ile kimliklendirilir (ADR-0023 §9; talepler: `sub` = external_id, `aud` = app_id, `exp`/`iat` zorunlu, en çok 24 saat, yalnızca ES256).
 
 ```ts
-await HeroSignal.login('user_42', { jwt: jwtFromBackend });                  // yalnızca JWT
-await HeroSignal.login('user_42', { identityHash: hmac, jwt: jwtFromBackend }); // both kipinde ikisi birlikte
-await HeroSignal.updateUserJwt(refreshedJwt); // süresi dolmadan yenileyin
-HeroSignal.logout();
+await Pushizo.login('user_42', { jwt: jwtFromBackend });                  // yalnızca JWT
+await Pushizo.login('user_42', { identityHash: hmac, jwt: jwtFromBackend }); // both kipinde ikisi birlikte
+await Pushizo.updateUserJwt(refreshedJwt); // süresi dolmadan yenileyin
+Pushizo.logout();
 ```
 
 - JWT yerel SDK'da identity hash ile aynı kalıcı depoda saklanır ve tüm `/sdk/v1/...` isteklerinde
@@ -188,22 +188,22 @@ HeroSignal.logout();
 
 ### Live Activities (iOS)
 
-Köprü, iOS SDK'nın genel `HeroSignalDefaultLiveActivityAttributes` türünü kullanır (ADR-0024). Push-to-start (sunucudan
+Köprü, iOS SDK'nın genel `PushizoDefaultLiveActivityAttributes` türünü kullanır (ADR-0024). Push-to-start (sunucudan
 uzaktan başlatma) iOS 17.2+, yerel başlatma iOS 16.1+ ister; Android'de çağrılar `PLATFORM_NOT_SUPPORTED` ile reddedilir.
 
 ```ts
-await HeroSignal.initialize('app_…');
-await HeroSignal.LiveActivities.setupDefaultLiveActivity(); // her açılışta: belirteçler sunucuya kaydedilir
-await HeroSignal.LiveActivities.startDefaultLiveActivity('order_42', { title: 'Sipariş #42' }, { status: 'Yolda', eta: 12 });
+await Pushizo.initialize('app_…');
+await Pushizo.LiveActivities.setupDefaultLiveActivity(); // her açılışta: belirteçler sunucuya kaydedilir
+await Pushizo.LiveActivities.startDefaultLiveActivity('order_42', { title: 'Sipariş #42' }, { status: 'Yolda', eta: 12 });
 ```
 
 1. Uygulamanın `Info.plist` dosyasına `NSSupportsLiveActivities = YES` ekleyin.
 2. Xcode → **File → New → Target → Widget Extension** ("Include Live Activity" seçili). Widget hedefine SPM'de
-   `HeroSignalExtension` ürününü ekleyip `import HeroSignalExtension`, CocoaPods'ta `pod 'HeroSignal/Extension'` ekleyip
-   `import HeroSignal` yazın:
+   `PushizoExtension` ürününü ekleyip `import PushizoExtension`, CocoaPods'ta `pod 'Pushizo/Extension'` ekleyip
+   `import Pushizo` yazın:
 
    ```swift
-   ActivityConfiguration(for: HeroSignalDefaultLiveActivityAttributes.self) { context in
+   ActivityConfiguration(for: PushizoDefaultLiveActivityAttributes.self) { context in
        VStack {
            Text(context.attributes.data["title"]?.stringValue ?? "")
            Text(context.state.data["status"]?.description ?? "")
@@ -214,18 +214,18 @@ await HeroSignal.LiveActivities.startDefaultLiveActivity('order_42', { title: 'S
    }
    ```
 
-3. Dashboard'da (**App → Live Activities**) veya API'de tür adı tam olarak `HeroSignalDefaultLiveActivityAttributes`
+3. Dashboard'da (**App → Live Activities**) veya API'de tür adı tam olarak `PushizoDefaultLiveActivityAttributes`
    olarak tanımlanmalıdır. Sunucudan gönderim:
-   `POST /v1/apps/{appId}/live-activities/HeroSignalDefaultLiveActivityAttributes/start` (`activity_id`, `attributes`,
+   `POST /v1/apps/{appId}/live-activities/PushizoDefaultLiveActivityAttributes/start` (`activity_id`, `attributes`,
    `content_state`, `target`), `…/update` ve `…/end` (`activity_id` ile).
 
 - `activityId` 1-100 karakter (harf, rakam ve `_ . : -`); `attributes`/`contentState` düz nesnedir, anahtarlar 1-64
-  karakter, değerler metin, sonlu sayı veya mantıksal değerdir; `attributes` içinde `herosignal` anahtarı ayrılmıştır.
+  karakter, değerler metin, sonlu sayı veya mantıksal değerdir; `attributes` içinde `pushizo` anahtarı ayrılmıştır.
   Kurala uymayan girdi yerel modüle gitmeden `TypeError` fırlatır.
 - Ret kodları: `PLATFORM_NOT_SUPPORTED` (Android veya iOS 16.1 öncesi), `NOT_READY` (`initialize` çağrılmadı),
   `INVALID_ARGUMENT`, `LIVE_ACTIVITY_FAILED` (Live Activities kapalı, `NSSupportsLiveActivities` yok vb.).
 - Kendi tip-güvenli `ActivityAttributes` türünüzü kullanmak isterseniz iOS yerel tarafında (AppDelegate)
-  `HeroSignal.LiveActivities.register(MyAttributes.self)` çağırın; ayrıntı `docs/sdk/ios.md` → "Live Activities".
+  `Pushizo.LiveActivities.register(MyAttributes.self)` çağırın; ayrıntı `docs/sdk/ios.md` → "Live Activities".
 
 ### HTML in-app ve carousel
 
@@ -243,11 +243,11 @@ aboneliğine yazar (`PATCH /sdk/v1/apps/{appId}/subscriptions/{id}` → `locatio
 yerel SDK'nın kalıcı kuyruğuyla gider. İzin yoksa sessizce gönderilmez.
 
 ```ts
-const granted = await HeroSignal.Location.requestPermission('Yakındaki mağazaları göstermek için konumunuzu kullanırız.');
-if (granted) HeroSignal.Location.setShared(true);
+const granted = await Pushizo.Location.requestPermission('Yakındaki mağazaları göstermek için konumunuzu kullanırız.');
+if (granted) Pushizo.Location.setShared(true);
 
-const shared = await HeroSignal.Location.isShared(); // kalıcı tercih (izin durumundan bağımsız)
-HeroSignal.Location.setShared(false);                // sunucudaki konum ve rıza kaydı silinir
+const shared = await Pushizo.Location.isShared(); // kalıcı tercih (izin durumundan bağımsız)
+Pushizo.Location.setShared(false);                // sunucudaki konum ve rıza kaydı silinir
 ```
 
 | API | Açıklama |
@@ -276,7 +276,7 @@ HeroSignal.Location.setShared(false);                // sunucudaki konum ve rız
 
 ### Gizlilik (KVKK/GDPR)
 
-`initialize(appId, { requiresPrivacyConsent: true })` ile başlatıldığında `HeroSignal.setConsentGiven(true)` çağrılana
+`initialize(appId, { requiresPrivacyConsent: true })` ile başlatıldığında `Pushizo.setConsentGiven(true)` çağrılana
 kadar hiçbir ağ çağrısı yapılmaz. `setConsentGiven(false)` kuyruğu ve yerel kimliği temizler.
 
 ### Erken başlatma ve soğuk açılış
@@ -285,9 +285,9 @@ Bildirime dokunularak açılan uygulamada tıklama, JS'te `click` dinleyicisi ek
 JS yüklenmeden başlaması için (oturum başlangıcı, in-app Activity takibi, iOS bildirim merkezi temsilcisi):
 
 - **Android:** `AndroidManifest.xml` → `<application>` içine
-  `com.herosignal.reactnative.app_id` (ve isteğe bağlı `com.herosignal.reactnative.api_url`,
-  `com.herosignal.reactnative.requires_privacy_consent`, `com.herosignal.reactnative.log_level`) meta-data'sı.
-- **iOS:** `Info.plist` → `HeroSignalAppId` (ve isteğe bağlı `HeroSignalApiUrl`).
+  `com.pushizo.reactnative.app_id` (ve isteğe bağlı `com.pushizo.reactnative.api_url`,
+  `com.pushizo.reactnative.requires_privacy_consent`, `com.pushizo.reactnative.log_level`) meta-data'sı.
+- **iOS:** `Info.plist` → `PushizoAppId` (ve isteğe bağlı `PushizoApiUrl`).
 
 Expo plugin'i `appId` verildiğinde bunları ekler. JS `initialize` yine çağrılmalıdır; aynı appId ile ikinci çağrı yerel
 SDK'yı yeniden kurmaz.
@@ -304,14 +304,14 @@ Promise reddi `code` alanı: `INVALID_ARGUMENT` (geçersiz e-posta/telefon/alias
 NSE; zengin medya (resim), aksiyon düğmeleri, rozet artışı (`badge_inc`) ve confirmed delivery (`received`) için gerekir.
 
 - **Expo:** plugin otomatik ekler (`iosNotificationServiceExtension: false` ile kapatılır).
-- **Bare RN:** Xcode → File → New → Target → *Notification Service Extension* (`HeroSignalNotificationServiceExtension`).
-  `plugin/templates/HeroSignalNotificationServiceExtension/NotificationService.swift` dosyasını hedefe kopyalayın;
-  hedefin Info.plist'ine `HeroSignalAppId`, (isteğe bağlı) `HeroSignalApiUrl` ve `HeroSignalAppGroup` ekleyin; hedefe
+- **Bare RN:** Xcode → File → New → Target → *Notification Service Extension* (`PushizoNotificationServiceExtension`).
+  `plugin/templates/PushizoNotificationServiceExtension/NotificationService.swift` dosyasını hedefe kopyalayın;
+  hedefin Info.plist'ine `PushizoAppId`, (isteğe bağlı) `PushizoApiUrl` ve `PushizoAppGroup` ekleyin; hedefe
   aynı App Group yetkisini verin. Podfile:
 
   ```ruby
-  target 'HeroSignalNotificationServiceExtension' do
-    pod 'HeroSignal/Extension', '~> 0.1'   # yerel geliştirme: :path => '<repo>/sdk/ios'
+  target 'PushizoNotificationServiceExtension' do
+    pod 'Pushizo/Extension', '~> 0.1'   # yerel geliştirme: :path => '<repo>/sdk/ios'
   end
   ```
 
@@ -322,17 +322,17 @@ NSE; zengin medya (resim), aksiyon düğmeleri, rozet artışı (`badge_inc`) ve
 
 | Katman | Dosya |
 |--------|-------|
-| TS API | `src/HeroSignal.ts` (ad alanları), `src/events.ts` (NativeEventEmitter abonelikleri), `src/types.ts` |
-| Codegen sözleşmesi | `src/NativeHeroSignal.ts` (TurboModule `HeroSignal`) |
-| Android | `android/src/main/java/com/herosignal/reactnative/` (`HeroSignalModuleImpl`, `HeroSignalBridge`, `HeroSignalInitProvider`); `src/newarch` / `src/oldarch` modül kabukları |
-| iOS | `ios/HeroSignalRN.mm` (ObjC++ kabuk, TurboModule), `ios/HeroSignalRNBridge.swift` (gövde), `ios/HeroSignalRNPush.h` |
+| TS API | `src/Pushizo.ts` (ad alanları), `src/events.ts` (NativeEventEmitter abonelikleri), `src/types.ts` |
+| Codegen sözleşmesi | `src/NativePushizo.ts` (TurboModule `Pushizo`) |
+| Android | `android/src/main/java/com/pushizo/reactnative/` (`PushizoModuleImpl`, `PushizoBridge`, `PushizoInitProvider`); `src/newarch` / `src/oldarch` modül kabukları |
+| iOS | `ios/PushizoRN.mm` (ObjC++ kabuk, TurboModule), `ios/PushizoRNBridge.swift` (gövde), `ios/PushizoRNPush.h` |
 | Expo | `plugin/src` → `plugin/build`, `app.plugin.js`, `plugin/templates` |
 
-Olaylar: `HeroSignal-notificationClick`, `HeroSignal-notificationWillDisplay`, `HeroSignal-permissionChange`,
-`HeroSignal-pushSubscriptionChange`, `HeroSignal-inAppClick`, `HeroSignal-inAppLifecycle`. In-app mesajlar yerel
+Olaylar: `Pushizo-notificationClick`, `Pushizo-notificationWillDisplay`, `Pushizo-permissionChange`,
+`Pushizo-pushSubscriptionChange`, `Pushizo-inAppClick`, `Pushizo-inAppLifecycle`. In-app mesajlar yerel
 SDK'nın varsayılan çizimiyle (Android Dialog, iOS UIWindow) gösterilir.
 
-`HeroSignal-permissionChange` yerel SDK izin gözlemcisinden (`HeroSignal.Notifications.addPermissionObserver`, Android ve
+`Pushizo-permissionChange` yerel SDK izin gözlemcisinden (`Pushizo.Notifications.addPermissionObserver`, Android ve
 iOS) üretilir: izin isteği sonuçlandığında ve uygulama ön plana döndüğünde izin ayarlardan değiştiyse yalnızca gerçek
 değişiklikte gönderilir; köprü kendi izin yoklaması yapmaz.
 

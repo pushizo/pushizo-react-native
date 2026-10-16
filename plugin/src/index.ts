@@ -1,13 +1,13 @@
 import { type ConfigPlugin, createRunOncePlugin } from '@expo/config-plugins';
-import { withHeroSignalAndroid } from './android';
-import { withHeroSignalIos } from './ios';
-import { type HeroSignalPluginProps, validateProps } from './props';
+import { withPushizoAndroid } from './android';
+import { withPushizoIos } from './ios';
+import { type PushizoPluginProps, validateProps } from './props';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pkg = require('../../package.json') as { name: string; version: string };
 
 /**
- * HeroSignal Expo config plugin.
+ * Pushizo Expo config plugin.
  *
  * iOS: push yetkisi (aps-environment), arka plan modu (remote-notification), App Group, APNs token iletimi
  * (AppDelegate), Notification Service Extension hedefi ve Podfile. Android: POST_NOTIFICATIONS, varsayılan bildirim
@@ -15,15 +15,15 @@ const pkg = require('../../package.json') as { name: string; version: string };
  * `com.google.gms.google-services` Gradle eklentisi (dosya yoksa uyarı).
  *
  * ```json
- * ["@herosignal/react-native", { "mode": "development", "appId": "app_…", "androidSmallIcon": "./assets/notification-icon.png" }]
+ * ["@pushizo/react-native", { "mode": "development", "appId": "app_…", "androidSmallIcon": "./assets/notification-icon.png" }]
  * ```
  */
-const withHeroSignal: ConfigPlugin<HeroSignalPluginProps> = (config, input) => {
+const withPushizo: ConfigPlugin<PushizoPluginProps> = (config, input) => {
   const props = validateProps(input);
-  config = withHeroSignalIos(config, props);
-  config = withHeroSignalAndroid(config, props);
+  config = withPushizoIos(config, props);
+  config = withPushizoAndroid(config, props);
   return config;
 };
 
-export type { HeroSignalPluginProps } from './props';
-export default createRunOncePlugin(withHeroSignal, pkg.name, pkg.version);
+export type { PushizoPluginProps } from './props';
+export default createRunOncePlugin(withPushizo, pkg.name, pkg.version);

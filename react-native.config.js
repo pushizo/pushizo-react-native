@@ -7,11 +7,11 @@ module.exports = {
     platforms: {
       android: {
         sourceDir: './android',
-        packageImportPath: 'import com.herosignal.reactnative.HeroSignalPackage;',
-        packageInstance: 'new HeroSignalPackage()',
+        packageImportPath: 'import com.pushizo.reactnative.PushizoPackage;',
+        packageInstance: 'new PushizoPackage()',
       },
       ios: {
-        podspecPath: './herosignal-react-native.podspec',
+        podspecPath: './pushizo-react-native.podspec',
       },
     },
   },

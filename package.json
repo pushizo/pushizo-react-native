@@ -1,13 +1,13 @@
 {
-  "name": "@herosignal/react-native",
+  "name": "@pushizo/react-native",
   "version": "0.1.0",
-  "description": "HeroSignal React Native SDK: push aboneliği, kullanıcı/tag, e-posta/SMS, in-app mesajlar, bildirim kutusu ve Expo config plugin (Android + iOS).",
+  "description": "Pushizo React Native SDK: push aboneliği, kullanıcı/tag, e-posta/SMS, in-app mesajlar, bildirim kutusu ve Expo config plugin (Android + iOS).",
   "license": "MIT",
-  "author": "HeroSignal <sdk@herosignal.dev>",
-  "homepage": "https://github.com/exec0de/herosignal/tree/main/sdk/react-native#readme",
+  "author": "Pushizo <bildirim@pushizo.com>",
+  "homepage": "https://github.com/exec0de/pushizo/tree/main/sdk/react-native#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/exec0de/herosignal.git",
+    "url": "https://github.com/exec0de/pushizo.git",
     "directory": "sdk/react-native"
   },
   "main": "lib/index.js",
@@ -24,7 +24,7 @@
     "plugin/templates",
     "app.plugin.js",
     "react-native.config.js",
-    "herosignal-react-native.podspec",
+    "pushizo-react-native.podspec",
     "!**/__tests__",
     "!**/__fixtures__",
     "!**/__mocks__"
@@ -43,7 +43,7 @@
     "push",
     "notifications",
     "in-app",
-    "herosignal"
+    "pushizo"
   ],
   "peerDependencies": {
     "expo": "*",
@@ -70,15 +70,15 @@
     "typescript": "^5.9.3"
   },
   "codegenConfig": {
-    "name": "RNHeroSignalSpec",
+    "name": "RNPushizoSpec",
     "type": "modules",
     "jsSrcsDir": "src",
     "android": {
-      "javaPackageName": "com.herosignal.reactnative"
+      "javaPackageName": "com.pushizo.reactnative"
     },
     "ios": {
       "modulesProvider": {
-        "HeroSignal": "HeroSignalRN"
+        "Pushizo": "PushizoRN"
       }
     }
   },
