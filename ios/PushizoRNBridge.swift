@@ -24,9 +24,11 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
     @objc public static let eventSubscription = "Pushizo-pushSubscriptionChange"
     @objc public static let eventInAppClick = "Pushizo-inAppClick"
     @objc public static let eventInAppLifecycle = "Pushizo-inAppLifecycle"
+    @objc public static let eventChat = "Pushizo-chatEvent"
+    @objc public static let eventChatOpen = "Pushizo-chatOpen"
 
     @objc public static var supportedEvents: [String] {
-        [eventClick, eventForeground, eventPermission, eventSubscription, eventInAppClick, eventInAppLifecycle]
+        [eventClick, eventForeground, eventPermission, eventSubscription, eventInAppClick, eventInAppLifecycle, eventChat, eventChatOpen]
     }
 
     /// Info.plist anahtarları (Expo config plugin yazar; bare RN'de elle eklenebilir).
@@ -51,6 +53,8 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
     private var emitter: ((String, [String: Any]) -> Void)?
     private var jsEvents = Set<String>()
     private var pendingClicks: [[String: Any]] = []
+    /// JS `Chat.addEventListener('open')` eklenene kadar bekletilen sohbet bildirimi tıklamaları.
+    private var pendingChatOpens: [[String: Any]] = []
     private var listenersRegistered = false
     private var initializedAppId: String?
     private var foregroundHandlerEnabled = false
@@ -94,6 +98,12 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
     @objc public func jsListenerAdded(_ event: String) {
         onMain {
             self.jsEvents.insert(event)
+            if event == Self.eventChatOpen {
+                let pending = self.pendingChatOpens
+                self.pendingChatOpens.removeAll()
+                pending.forEach { self.emit(Self.eventChatOpen, $0) }
+                return
+            }
             guard event == Self.eventClick else { return }
             let pending = self.pendingClicks
             self.pendingClicks.removeAll()
@@ -135,6 +145,7 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
     private func registerListeners() {
         guard !listenersRegistered else { return }
         listenersRegistered = true
+        registerChatListeners()
         Pushizo.Notifications.addClickListener { [weak self] e in
             guard let self else { return }
             let payload: [String: Any] = ["notification": Self.map(e.notification), "actionId": e.actionId ?? NSNull(), "url": e.url ?? NSNull()]
@@ -378,6 +389,92 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
         emit(Self.eventInAppLifecycle, ["event": event, "messageId": message.id])
     }
 
+    // MARK: - Canlı sohbet (ADR-0040)
+
+    /// Sohbet dinleyicileri `start` içinde bir kez kaydedilir.
+    private func registerChatListeners() {
+        Pushizo.Chat.addListener { [weak self] event in
+            var body: [String: Any] = event.payload
+            body["type"] = event.type
+            self?.emit(Self.eventChat, body)
+        }
+        Pushizo.Chat.addOpenListener { [weak self] info in
+            self?.onMain {
+                guard let self else { return }
+                if self.emitter != nil, self.jsEvents.contains(Self.eventChatOpen) {
+                    self.emit(Self.eventChatOpen, info.dictionary)
+                } else {
+                    if self.pendingChatOpens.count >= Self.maxPendingClicks { self.pendingChatOpens.removeFirst() }
+                    self.pendingChatOpens.append(info.dictionary)
+                }
+            }
+        }
+    }
+
+    @objc public func chatStart(_ name: String?, email: String?, language: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        inbox(resolve, reject) { try await Pushizo.Chat.start(name: name, email: email, language: language).dictionary }
+    }
+
+    @objc public func chatGetConfig(_ language: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        inbox(resolve, reject) { try await Pushizo.Chat.getConfig(language: language).dictionary }
+    }
+
+    @objc public func chatGetConversation(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        inbox(resolve, reject) { try await Pushizo.Chat.getConversation().dictionary }
+    }
+
+    @objc public func chatGetMessages(_ afterSeq: NSNumber?, beforeSeq: NSNumber?, limit: Double, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        inbox(resolve, reject) {
+            try await Pushizo.Chat.getMessages(afterSeq: afterSeq?.intValue, beforeSeq: beforeSeq?.intValue, limit: Int(limit)).dictionary
+        }
+    }
+
+    @objc public func chatSendMessage(_ text: String, optionId: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        inbox(resolve, reject) { try await Pushizo.Chat.sendMessage(text, optionId: optionId).dictionary }
+    }
+
+    @objc public func chatSendAttachmentData(_ base64: String, fileName: String, mimeType: String, text: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        guard let data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters) else {
+            reject("INVALID_ARGUMENT", "base64 içerik çözülemedi", nil); return
+        }
+        inbox(resolve, reject) { try await Pushizo.Chat.sendAttachment(data, fileName: fileName, mimeType: mimeType, text: text).dictionary }
+    }
+
+    @objc public func chatSendAttachmentUri(_ uri: String, fileName: String, mimeType: String, text: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        guard let url = URL(string: uri), url.isFileURL else { reject("INVALID_ARGUMENT", "uri bir file:// adresi olmalı", nil); return }
+        inbox(resolve, reject) {
+            let data = try Data(contentsOf: url)
+            let name = fileName.isEmpty ? url.lastPathComponent : fileName
+            return try await Pushizo.Chat.sendAttachment(data, fileName: name, mimeType: mimeType, text: text).dictionary
+        }
+    }
+
+    @objc public func chatMarkRead(_ seq: Double, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        inbox(resolve, reject) { try await Pushizo.Chat.markRead(Int(seq)) }
+    }
+
+    @objc public func chatRefreshUnreadCount(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        inbox(resolve, reject) { try await Pushizo.Chat.refreshUnreadCount() }
+    }
+
+    @objc public func chatUnreadCount() -> Int { Pushizo.Chat.unreadCount }
+
+    @objc public func chatLeaveOfflineMessage(_ email: String, text: String, name: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        inbox(resolve, reject) { try await Pushizo.Chat.leaveOfflineMessage(email: email, text: text, name: name).dictionary }
+    }
+
+    @objc public func chatSetTyping(_ typing: Bool) { Pushizo.Chat.setTyping(typing) }
+
+    @objc public func chatStartListening() { Pushizo.Chat.startListening() }
+
+    @objc public func chatStopListening() { Pushizo.Chat.stopListening() }
+
+    @objc public func chatAttachmentUrl(_ attachmentId: String, download: Bool, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        inbox(resolve, reject) { try Pushizo.Chat.attachmentUrl(attachmentId, download: download).absoluteString }
+    }
+
+    @objc public func chatVisitorId() -> String? { Pushizo.Chat.visitorId }
+
     // MARK: - Bildirim kutusu
 
     @objc public func inboxList(_ limit: Double, cursor: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
@@ -412,6 +509,8 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
                 DispatchQueue.main.async { resolve(value) }
             } catch let error as HSApiError {
                 DispatchQueue.main.async { reject(error.code, error.message, error) }
+            } catch HSChatError.invalidArgument(let message) {
+                DispatchQueue.main.async { reject("INVALID_ARGUMENT", message, nil) }
             } catch let error as HSError {
                 let code: String
                 switch error {

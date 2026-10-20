@@ -4,6 +4,8 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import com.pushizo.sdk.Pushizo
+import com.pushizo.sdk.HsChatEventAdapter
+import com.pushizo.sdk.HsChatOpenListener
 import com.pushizo.sdk.HsClickEvent
 import com.pushizo.sdk.HsForegroundEvent
 import com.pushizo.sdk.HsInAppClickEvent
@@ -27,6 +29,8 @@ object PushizoBridge {
     const val EVENT_SUBSCRIPTION = "Pushizo-pushSubscriptionChange"
     const val EVENT_IN_APP_CLICK = "Pushizo-inAppClick"
     const val EVENT_IN_APP_LIFECYCLE = "Pushizo-inAppLifecycle"
+    const val EVENT_CHAT = "Pushizo-chatEvent"
+    const val EVENT_CHAT_OPEN = "Pushizo-chatOpen"
 
     /** iOS ile aynı: ertelenmiş ön plan kararı için bekleme süresi. */
     private const val FOREGROUND_TIMEOUT_MS = 25_000L
@@ -46,6 +50,8 @@ object PushizoBridge {
     /** JS'te en az bir kez dinleyici eklenmiş olaylar (bağlı Sink için). */
     private val jsEvents = ConcurrentHashMap.newKeySet<String>()
     private val pendingClicks = ArrayList<Map<String, Any?>>()
+    /** JS `Chat.addEventListener('open')` eklenene kadar bekletilen sohbet bildirimi tıklamaları. */
+    private val pendingChatOpens = ArrayList<Map<String, Any?>>()
     private val foregroundEvents = ConcurrentHashMap<String, HsForegroundEvent>()
     private var lastState: Map<String, Any?>? = null
 
@@ -71,6 +77,8 @@ object PushizoBridge {
         Pushizo.Notifications.addPermissionObserver(permissionObserver)
         Pushizo.InAppMessages.addClickListener(inAppClickListener)
         Pushizo.InAppMessages.addLifecycleListener(inAppLifecycleListener)
+        Pushizo.Chat.addListener(chatListener)
+        Pushizo.Chat.addOpenListener(chatOpenListener)
         val state = Pushizo.User.pushSubscription.state
         synchronized(lock) { lastState = state.toMap() }
     }
@@ -95,9 +103,13 @@ object PushizoBridge {
     /** NativeEventEmitter `addListener`: tıklama dinleyicisi geldiğinde bekleyen tıklamalar gönderilir. */
     fun onJsListenerAdded(event: String) {
         jsEvents.add(event)
-        if (event != EVENT_CLICK) return
-        val pending = synchronized(lock) { pendingClicks.toList().also { pendingClicks.clear() } }
-        pending.forEach { emit(EVENT_CLICK, it) }
+        val buffer = when (event) {
+            EVENT_CLICK -> pendingClicks
+            EVENT_CHAT_OPEN -> pendingChatOpens
+            else -> return
+        }
+        val pending = synchronized(lock) { buffer.toList().also { buffer.clear() } }
+        pending.forEach { emit(event, it) }
     }
 
     private fun emit(event: String, payload: Map<String, Any?>) {
@@ -161,6 +173,22 @@ object PushizoBridge {
 
     private val inAppClickListener: (HsInAppClickEvent) -> Unit = { e ->
         emit(EVENT_IN_APP_CLICK, mapOf("messageId" to e.messageId, "actionId" to e.actionId, "url" to e.url))
+    }
+
+    /** Canlı sohbet olayları: `{ type: message|typing|read|unread|conversation|connection|error, ... }`. */
+    private val chatListener = HsChatEventAdapter { type, payload -> emit(EVENT_CHAT, mapOf("type" to type) + payload) }
+
+    /** Sohbet bildirimine tıklama; JS dinleyicisi yoksa (soğuk açılış) bekletilir. */
+    private val chatOpenListener = HsChatOpenListener { info ->
+        val payload = info.toMap()
+        if (sink != null && jsEvents.contains(EVENT_CHAT_OPEN)) {
+            emit(EVENT_CHAT_OPEN, payload)
+        } else {
+            synchronized(lock) {
+                if (pendingChatOpens.size >= MAX_PENDING_CLICKS) pendingChatOpens.removeAt(0)
+                pendingChatOpens.add(payload)
+            }
+        }
     }
 
     private val inAppLifecycleListener = object : HsInAppLifecycleListener {

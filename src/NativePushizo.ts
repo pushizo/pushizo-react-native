@@ -89,6 +89,36 @@ export interface Spec extends TurboModule {
   inboxArchive(id: string): Promise<void>;
   inboxUnreadCount(): Promise<number>;
 
+  // --- Canlı sohbet (ADR-0040) ---
+  /** Sonuç: { userId, conversation } */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  chatStart(name: string | null, email: string | null, language: string | null): Promise<Object>;
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  chatGetConfig(language: string | null): Promise<Object>;
+  /** Sonuç: { conversation, unreadCount } */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  chatGetConversation(): Promise<Object>;
+  /** Sonuç: { messages: [ChatMessage], hasMore } */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  chatGetMessages(afterSeq: number | null, beforeSeq: number | null, limit: number): Promise<Object>;
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  chatSendMessage(text: string, optionId: string | null): Promise<Object>;
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  chatSendAttachmentData(base64: string, fileName: string, mimeType: string, text: string | null): Promise<Object>;
+  /** Android `content://`/`file://`, iOS `file://` adresi. */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  chatSendAttachmentUri(uri: string, fileName: string, mimeType: string, text: string | null): Promise<Object>;
+  chatMarkRead(seq: number): Promise<number>;
+  chatRefreshUnreadCount(): Promise<number>;
+  chatGetUnreadCount(): Promise<number>;
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  chatLeaveOfflineMessage(email: string, text: string, name: string | null): Promise<Object>;
+  chatSetTyping(typing: boolean): void;
+  chatStartListening(): void;
+  chatStopListening(): void;
+  chatAttachmentUrl(attachmentId: string, download: boolean): Promise<string>;
+  chatGetVisitorId(): Promise<string | null>;
+
   // --- Live Activities (yalnızca iOS 16.1+; Android `PLATFORM_NOT_SUPPORTED` ile reddeder) ---
   /** Genel `PushizoDefaultLiveActivityAttributes` türünü izlemeye alır (push-to-start ve güncelleme belirteçleri). */
   setupDefaultLiveActivity(): Promise<void>;

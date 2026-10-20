@@ -1,4 +1,5 @@
 import { EventHub } from './events';
+import { Chat } from './chat';
 import {
   type RawMap,
   toInboxItem,
@@ -648,6 +649,8 @@ export const Pushizo = {
   Notifications,
   InAppMessages,
   Inbox,
+  /** Canlı sohbet (ADR-0040). */
+  Chat,
   Session,
   LiveActivities,
   Location,

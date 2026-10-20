@@ -31,4 +31,20 @@ export {
   type UserPreference,
   type UserPreferences,
 } from './types';
+export {
+  mergeChatMessages,
+  type ChatAttachment,
+  type ChatAttachmentOptions,
+  type ChatAttachmentSource,
+  type ChatConfig,
+  type ChatConversation,
+  type ChatConversationState,
+  type ChatEventMap,
+  type ChatIdentifyResult,
+  type ChatMessage,
+  type ChatMessagePage,
+  type ChatMessagesOptions,
+  type ChatQuickReply,
+  type ChatStartOptions,
+} from './chat';
 export { Pushizo as default } from './Pushizo';
