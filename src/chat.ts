@@ -320,7 +320,7 @@ export const Chat = {
   /** Ek gönderir (PNG/JPEG/WebP/GIF/PDF/düz metin, en çok 10 MB). */
   async sendAttachment(source: ChatAttachmentSource, options: ChatAttachmentOptions): Promise<ChatMessage> {
     requireText(options.fileName, 'fileName');
-    const mime = requireText(options.mimeType, 'mimeType').split(';')[0]!.trim().toLowerCase();
+    const mime = requireText(options.mimeType, 'mimeType').split(';')[0].trim().toLowerCase();
     if (!ATTACHMENT_TYPES.includes(mime)) throw new TypeError(`Pushizo: desteklenmeyen dosya türü '${mime}'.`);
     const text = options.text?.trim() ? options.text : null;
     const native = nativeModule();

@@ -182,7 +182,7 @@ describe('Pushizo.Chat (React Native)', () => {
     });
     const merged = mergeChatMessages([m(3), m(1), m(0, 'm_local001', 'pending')], [m(2), m(3, null, 'read')]);
     expect(merged.map((x) => x.seq)).toEqual([1, 2, 3, 0]);
-    expect(merged[2]!.status).toBe('read');
+    expect(merged[2].status).toBe('read');
     expect(mergeChatMessages(merged, [m(4, 'm_local001')]).map((x) => x.seq)).toEqual([1, 2, 3, 4]);
   });
 });
