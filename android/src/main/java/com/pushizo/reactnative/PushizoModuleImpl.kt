@@ -3,6 +3,8 @@ package com.pushizo.reactnative
 import android.Manifest
 import android.app.AlertDialog
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.util.Base64
 import android.os.Build
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
@@ -311,6 +313,53 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
         HsLog.w("uygulama paket bilgisi okunamadı", e)
         emptyArray()
     }
+
+    // --- Canlı sohbet (ADR-0040) ---
+
+    fun chatStart(name: String?, email: String?, language: String?, promise: Promise) =
+        Pushizo.Chat.start(name, email, language, reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+
+    fun chatGetConfig(language: String?, promise: Promise) =
+        Pushizo.Chat.getConfig(language, reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+
+    fun chatGetConversation(promise: Promise) = Pushizo.Chat.getConversation(reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+
+    fun chatGetMessages(afterSeq: Double?, beforeSeq: Double?, limit: Double, promise: Promise) =
+        Pushizo.Chat.getMessages(afterSeq?.toLong(), beforeSeq?.toLong(), limit.toInt(), reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+
+    fun chatSendMessage(text: String, optionId: String?, promise: Promise) =
+        Pushizo.Chat.sendMessage(text, optionId, reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+
+    /** Base64 içerik (JS'te ikili veri yok); geçersiz base64 `INVALID_ARGUMENT`. */
+    fun chatSendAttachmentData(base64: String, fileName: String, mimeType: String, text: String?, promise: Promise) = guard(promise) {
+        val bytes = Base64.decode(base64, Base64.DEFAULT)
+        Pushizo.Chat.sendAttachment(bytes, fileName, mimeType, text, reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+    }
+
+    fun chatSendAttachmentUri(uri: String, fileName: String, mimeType: String, text: String?, promise: Promise) = guard(promise) {
+        Pushizo.Chat.sendAttachment(Uri.parse(uri), fileName, mimeType, text, reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+    }
+
+    fun chatMarkRead(seq: Double, promise: Promise) = Pushizo.Chat.markRead(seq.toLong(), reply(promise) { it })
+
+    fun chatRefreshUnreadCount(promise: Promise) = Pushizo.Chat.refreshUnreadCount(reply(promise) { it })
+
+    fun chatGetUnreadCount(promise: Promise) = promise.resolve(Pushizo.Chat.unreadCount)
+
+    fun chatLeaveOfflineMessage(email: String, text: String, name: String?, promise: Promise) =
+        Pushizo.Chat.leaveOfflineMessage(email, text, name, reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+
+    fun chatSetTyping(typing: Boolean) = Pushizo.Chat.setTyping(typing)
+
+    fun chatStartListening() = Pushizo.Chat.startListening()
+
+    fun chatStopListening() = Pushizo.Chat.stopListening()
+
+    fun chatAttachmentUrl(attachmentId: String, download: Boolean, promise: Promise) = guard(promise) {
+        promise.resolve(Pushizo.Chat.attachmentUrl(attachmentId, download))
+    }
+
+    fun chatGetVisitorId(promise: Promise) = promise.resolve(Pushizo.Chat.visitorId)
 
     // --- Hata ayıklama ---
 

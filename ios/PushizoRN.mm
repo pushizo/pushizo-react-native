@@ -360,6 +360,120 @@ RCT_EXPORT_METHOD(inboxUnreadCount:(RCTPromiseResolveBlock)resolve reject:(RCTPr
   [[PushizoRNBridge shared] inboxUnreadCount:resolve reject:reject];
 }
 
+#pragma mark - Canlı sohbet
+
+RCT_EXPORT_METHOD(chatStart:(NSString *_Nullable)name
+                  email:(NSString *_Nullable)email
+                  language:(NSString *_Nullable)language
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatStart:name email:email language:language resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(chatGetConfig:(NSString *_Nullable)language
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatGetConfig:language resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(chatGetConversation:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatGetConversation:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(chatGetMessages:(NSNumber *_Nullable)afterSeq
+                  beforeSeq:(NSNumber *_Nullable)beforeSeq
+                  limit:(double)limit
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatGetMessages:afterSeq beforeSeq:beforeSeq limit:limit resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(chatSendMessage:(NSString *)text
+                  optionId:(NSString *_Nullable)optionId
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatSendMessage:text optionId:optionId resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(chatSendAttachmentData:(NSString *)base64
+                  fileName:(NSString *)fileName
+                  mimeType:(NSString *)mimeType
+                  text:(NSString *_Nullable)text
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatSendAttachmentData:base64 fileName:fileName mimeType:mimeType text:text resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(chatSendAttachmentUri:(NSString *)uri
+                  fileName:(NSString *)fileName
+                  mimeType:(NSString *)mimeType
+                  text:(NSString *_Nullable)text
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatSendAttachmentUri:uri fileName:fileName mimeType:mimeType text:text resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(chatMarkRead:(double)seq
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatMarkRead:seq resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(chatRefreshUnreadCount:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatRefreshUnreadCount:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(chatGetUnreadCount:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@([[PushizoRNBridge shared] chatUnreadCount]));
+}
+
+RCT_EXPORT_METHOD(chatLeaveOfflineMessage:(NSString *)email
+                  text:(NSString *)text
+                  name:(NSString *_Nullable)name
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatLeaveOfflineMessage:email text:text name:name resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(chatSetTyping:(BOOL)typing)
+{
+  [[PushizoRNBridge shared] chatSetTyping:typing];
+}
+
+RCT_EXPORT_METHOD(chatStartListening)
+{
+  [[PushizoRNBridge shared] chatStartListening];
+}
+
+RCT_EXPORT_METHOD(chatStopListening)
+{
+  [[PushizoRNBridge shared] chatStopListening];
+}
+
+RCT_EXPORT_METHOD(chatAttachmentUrl:(NSString *)attachmentId
+                  download:(BOOL)download
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatAttachmentUrl:attachmentId download:download resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(chatGetVisitorId:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve([[PushizoRNBridge shared] chatVisitorId]);
+}
+
 #pragma mark - Live Activities
 
 RCT_EXPORT_METHOD(setupDefaultLiveActivity:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)

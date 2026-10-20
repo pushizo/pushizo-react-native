@@ -196,6 +196,70 @@ class PushizoModule(reactContext: ReactApplicationContext) : NativePushizoSpec(r
         impl.inboxUnreadCount(promise)
     }
 
+    override fun chatStart(name: String?, email: String?, language: String?, promise: Promise) {
+        impl.chatStart(name, email, language, promise)
+    }
+
+    override fun chatGetConfig(language: String?, promise: Promise) {
+        impl.chatGetConfig(language, promise)
+    }
+
+    override fun chatGetConversation(promise: Promise) {
+        impl.chatGetConversation(promise)
+    }
+
+    override fun chatGetMessages(afterSeq: Double?, beforeSeq: Double?, limit: Double, promise: Promise) {
+        impl.chatGetMessages(afterSeq, beforeSeq, limit, promise)
+    }
+
+    override fun chatSendMessage(text: String, optionId: String?, promise: Promise) {
+        impl.chatSendMessage(text, optionId, promise)
+    }
+
+    override fun chatSendAttachmentData(base64: String, fileName: String, mimeType: String, text: String?, promise: Promise) {
+        impl.chatSendAttachmentData(base64, fileName, mimeType, text, promise)
+    }
+
+    override fun chatSendAttachmentUri(uri: String, fileName: String, mimeType: String, text: String?, promise: Promise) {
+        impl.chatSendAttachmentUri(uri, fileName, mimeType, text, promise)
+    }
+
+    override fun chatMarkRead(seq: Double, promise: Promise) {
+        impl.chatMarkRead(seq, promise)
+    }
+
+    override fun chatRefreshUnreadCount(promise: Promise) {
+        impl.chatRefreshUnreadCount(promise)
+    }
+
+    override fun chatGetUnreadCount(promise: Promise) {
+        impl.chatGetUnreadCount(promise)
+    }
+
+    override fun chatLeaveOfflineMessage(email: String, text: String, name: String?, promise: Promise) {
+        impl.chatLeaveOfflineMessage(email, text, name, promise)
+    }
+
+    override fun chatSetTyping(typing: Boolean) {
+        impl.chatSetTyping(typing)
+    }
+
+    override fun chatStartListening() {
+        impl.chatStartListening()
+    }
+
+    override fun chatStopListening() {
+        impl.chatStopListening()
+    }
+
+    override fun chatAttachmentUrl(attachmentId: String, download: Boolean, promise: Promise) {
+        impl.chatAttachmentUrl(attachmentId, download, promise)
+    }
+
+    override fun chatGetVisitorId(promise: Promise) {
+        impl.chatGetVisitorId(promise)
+    }
+
     override fun setupDefaultLiveActivity(promise: Promise) {
         impl.setupDefaultLiveActivity(promise)
     }

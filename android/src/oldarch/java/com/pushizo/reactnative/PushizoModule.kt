@@ -247,6 +247,86 @@ class PushizoModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
     }
 
     @ReactMethod
+    fun chatStart(name: String?, email: String?, language: String?, promise: Promise) {
+        impl.chatStart(name, email, language, promise)
+    }
+
+    @ReactMethod
+    fun chatGetConfig(language: String?, promise: Promise) {
+        impl.chatGetConfig(language, promise)
+    }
+
+    @ReactMethod
+    fun chatGetConversation(promise: Promise) {
+        impl.chatGetConversation(promise)
+    }
+
+    @ReactMethod
+    fun chatGetMessages(afterSeq: Dynamic, beforeSeq: Dynamic, limit: Double, promise: Promise) {
+        impl.chatGetMessages(afterSeq.numberOrNull(), beforeSeq.numberOrNull(), limit, promise)
+    }
+
+    @ReactMethod
+    fun chatSendMessage(text: String, optionId: String?, promise: Promise) {
+        impl.chatSendMessage(text, optionId, promise)
+    }
+
+    @ReactMethod
+    fun chatSendAttachmentData(base64: String, fileName: String, mimeType: String, text: String?, promise: Promise) {
+        impl.chatSendAttachmentData(base64, fileName, mimeType, text, promise)
+    }
+
+    @ReactMethod
+    fun chatSendAttachmentUri(uri: String, fileName: String, mimeType: String, text: String?, promise: Promise) {
+        impl.chatSendAttachmentUri(uri, fileName, mimeType, text, promise)
+    }
+
+    @ReactMethod
+    fun chatMarkRead(seq: Double, promise: Promise) {
+        impl.chatMarkRead(seq, promise)
+    }
+
+    @ReactMethod
+    fun chatRefreshUnreadCount(promise: Promise) {
+        impl.chatRefreshUnreadCount(promise)
+    }
+
+    @ReactMethod
+    fun chatGetUnreadCount(promise: Promise) {
+        impl.chatGetUnreadCount(promise)
+    }
+
+    @ReactMethod
+    fun chatLeaveOfflineMessage(email: String, text: String, name: String?, promise: Promise) {
+        impl.chatLeaveOfflineMessage(email, text, name, promise)
+    }
+
+    @ReactMethod
+    fun chatSetTyping(typing: Boolean) {
+        impl.chatSetTyping(typing)
+    }
+
+    @ReactMethod
+    fun chatStartListening() {
+        impl.chatStartListening()
+    }
+
+    @ReactMethod
+    fun chatStopListening() {
+        impl.chatStopListening()
+    }
+
+    @ReactMethod
+    fun chatAttachmentUrl(attachmentId: String, download: Boolean, promise: Promise) {
+        impl.chatAttachmentUrl(attachmentId, download, promise)
+    }
+
+    @ReactMethod
+    fun chatGetVisitorId(promise: Promise) {
+        impl.chatGetVisitorId(promise)
+    }
+
+    @ReactMethod
     fun setupDefaultLiveActivity(promise: Promise) {
         impl.setupDefaultLiveActivity(promise)
     }
@@ -285,4 +365,7 @@ class PushizoModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
     fun removeListeners(count: Double) {
         // Dinleyici sayısı JS tarafında izlenir; yerelde ek iş gerekmez.
     }
+
+    /** Eski mimaride `number | null` argümanı `Dynamic` olarak gelir. */
+    private fun Dynamic.numberOrNull(): Double? = if (isNull || type != ReadableType.Number) null else asDouble()
 }

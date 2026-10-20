@@ -141,4 +141,31 @@ describe('yerel sözleşme', () => {
     expect(swift).toContain('@objc public func requestLocationPermission(_ rationale: String?, resolve: @escaping (Any?) -> Void)');
     expect(swift).toContain('Pushizo.Location.requestPermission(rationale: text) { granted in resolve(granted) }');
   });
+
+  test('Canlı sohbet: yerel Pushizo.Chat yüzeyine bağlı, olaylar ve sohbet açma tıklaması köprüden gelir', () => {
+    const chat = methods.filter((m) => m.startsWith('chat'));
+    expect(chat.length).toBeGreaterThanOrEqual(16);
+
+    const impl = read('android/src/main/java/com/pushizo/reactnative/PushizoModuleImpl.kt');
+    expect(impl).toContain('Pushizo.Chat.start(name, email, language, reply(promise)');
+    expect(impl).toContain('Pushizo.Chat.sendMessage(text, optionId, reply(promise)');
+    expect(impl).toContain('Pushizo.Chat.getMessages(afterSeq?.toLong(), beforeSeq?.toLong(), limit.toInt(), reply(promise)');
+    expect(impl).toContain('Pushizo.Chat.markRead(seq.toLong(), reply(promise) { it })');
+    expect(impl).toContain('fun chatStartListening() = Pushizo.Chat.startListening()');
+    const bridge = read('android/src/main/java/com/pushizo/reactnative/PushizoBridge.kt');
+    expect(bridge).toContain('const val EVENT_CHAT = "Pushizo-chatEvent"');
+    expect(bridge).toContain('const val EVENT_CHAT_OPEN = "Pushizo-chatOpen"');
+    expect(bridge).toContain('Pushizo.Chat.addListener(chatListener)');
+    expect(bridge).toContain('Pushizo.Chat.addOpenListener(chatOpenListener)');
+
+    const swift = read('ios/PushizoRNBridge.swift');
+    expect(swift).toContain('@objc public static let eventChat = "Pushizo-chatEvent"');
+    expect(swift).toContain('@objc public static let eventChatOpen = "Pushizo-chatOpen"');
+    expect(swift).toContain('try await Pushizo.Chat.sendMessage(text, optionId: optionId).dictionary');
+    expect(swift).toContain('try await Pushizo.Chat.markRead(Int(seq))');
+    expect(swift).toContain('@objc public func chatStartListening() { Pushizo.Chat.startListening() }');
+    expect(swift).toContain('registerChatListeners()');
+    const mm = read('ios/PushizoRN.mm');
+    expect(mm).toContain('[[PushizoRNBridge shared] chatSendMessage:text optionId:optionId resolve:resolve reject:reject];');
+  });
 });

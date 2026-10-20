@@ -235,6 +235,28 @@ yapılandırma gerekmez, tıklama ve yaşam döngüsü olayları mevcut in-app d
 (`supports=html,carousel`) yerel SDK tarafından yapılır; desteklemeyen eski yerel sürümlere sunucu HTML mesaj göndermez
 ve carousel bloklarını çıkarır (ADR-0027 §6–7).
 
+### Canlı sohbet
+
+```ts
+await Pushizo.Chat.start({ name: 'Ali' });
+const config = await Pushizo.Chat.getConfig();          // online, offlineMessage, ek sınırları
+let { messages } = await Pushizo.Chat.getMessages();
+Pushizo.Chat.addEventListener('message', ({ message }) => (messages = mergeChatMessages(messages, [message])));
+Pushizo.Chat.addEventListener('open', ({ conversationId }) => openChat(conversationId)); // bildirime tıklama
+Pushizo.Chat.startListening();                           // ekran açıkken; ayrılınca stopListening()
+await Pushizo.Chat.sendMessage('Merhaba');               // bot hızlı yanıtı: sendMessage(label, { optionId })
+await Pushizo.Chat.sendAttachment({ uri: 'file:///…/rapor.pdf' }, { fileName: 'rapor.pdf', mimeType: 'application/pdf' });
+await Pushizo.Chat.markRead(messages[messages.length - 1].seq);
+```
+
+Ziyaretçi kimliği, çevrimdışı kuyruk (aynı `client_message_id` ile yeniden deneme), canlı akış (SSE; koparsa üstel
+geri çekilme + `after_seq` yoklaması) ve push ile gelen temsilci mesajları (`pushizo_chat`) yerel Android/iOS SDK'sındadır;
+`start` sonrası login/logout ve push aboneliği değişince bağlama yerel SDK'da yenilenir, logout ziyaretçiyi sıfırlar.
+Mesajlar `seq` ile sıralanır; ağ yokken gönderilen mesaj `pending` döner ve gönderilince olayla sunucu kopyası gelir.
+Ayrıntı: `docs/sdk/android.md` / `docs/sdk/ios.md` → "Canlı sohbet" (ADR-0040).
+Olaylar: `message`, `typing`, `read`, `unread`, `conversation`, `connection`, `error`, `open` (soğuk açılışta
+ilk dinleyiciye iletilir).
+
 ### Konum
 
 Konum paylaşımı isteğe bağlıdır ve **yalnızca ön planda** çalışır (arka plan konumu yoktur). Paylaşım açık ve izin
