@@ -13,8 +13,16 @@
 
 **Pushizo React Native SDK** — React Native and Expo module that wraps the native Pushizo Android and iOS SDKs. The API is compatible with the eski sağlayıcı v5 React Native API; queueing, sessions, delivery receipts and in-app rendering run natively.
 
-> **Status:** Publishing to npm is in progress; until then you can build from this repository.<br>
-> **Durum:** npm yayını hazırlanıyor; o zamana kadar bu depodan derleyerek kullanabilirsiniz.
+> **Status:** Publishing to npm is in progress.<br>
+> **Durum:** npm yayını hazırlanıyor.
+
+**Install from GitHub until then · O zamana kadar GitHub'dan kurulum:**
+
+```bash
+npm install https://github.com/pushizo/pushizo-react-native/releases/download/v0.1.0/pushizo-react-native-0.1.0.tgz
+```
+
+**After publication · Yayından sonra:**
 
 ```bash
 npm install @pushizo/react-native
