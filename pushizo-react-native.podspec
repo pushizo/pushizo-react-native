@@ -13,7 +13,7 @@ Pod::Spec.new do |s|
   s.license      = package["license"]
   s.authors      = { "Pushizo" => "bildirim@pushizo.com" }
   s.platforms    = { :ios => "15.0" }
-  s.source       = { :git => "https://github.com/exec0de/pushizo.git", :tag => "react-native-v#{s.version}" }
+  s.source       = { :git => "https://github.com/pushizo/pushizo-react-native.git", :tag => "v#{s.version}" }
 
   s.source_files = "ios/**/*.{h,m,mm,swift}"
   s.public_header_files = "ios/PushizoRNPush.h"
