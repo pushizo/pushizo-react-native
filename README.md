@@ -19,7 +19,7 @@
 **Install from GitHub until then · O zamana kadar GitHub'dan kurulum:**
 
 ```bash
-npm install https://github.com/pushizo/pushizo-react-native/releases/download/v0.1.0/pushizo-react-native-0.1.0.tgz
+npm install --allow-remote=root https://github.com/pushizo/pushizo-react-native/releases/download/v0.1.0/pushizo-react-native-0.1.0.tgz
 ```
 
 **After publication · Yayından sonra:**
