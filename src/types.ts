@@ -16,7 +16,7 @@ export interface InitializeOptions {
   requiresPrivacyConsent?: boolean;
   /** Başlangıç günlük seviyesi (varsayılan `warn`). */
   logLevel?: LogLevel;
-  /** iOS: Notification Service Extension ile paylaşılan App Group (ör. `group.com.example.app`). */
+  /** iOS: Notification Service Extension ile paylaşılan App Group (ör. `group.com.pushizo.app`). */
   appGroup?: string;
   /** iOS: APNs ortamı (`development` / `production`); verilmezse provisioning profilinden tespit edilir. */
   apnsEnvironment?: 'development' | 'sandbox' | 'production';

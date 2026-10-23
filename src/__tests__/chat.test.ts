@@ -48,7 +48,7 @@ function load() {
     chatSetTyping: jest.fn(),
     chatStartListening: jest.fn(),
     chatStopListening: jest.fn(),
-    chatAttachmentUrl: resolved('https://api.example.com/sdk/v1/apps/app_1/chat/attachments/att_1?visitor_id=v&token=t'),
+    chatAttachmentUrl: resolved('https://api.pushizo.com/sdk/v1/apps/app_1/chat/attachments/att_1?visitor_id=v&token=t'),
     chatGetVisitorId: resolved('v'.repeat(32)),
     addListener: jest.fn(),
     removeListeners: jest.fn(),
@@ -126,8 +126,8 @@ describe('Pushizo.Chat (React Native)', () => {
     expect(native.chatMarkRead).toHaveBeenCalledWith(12);
     expect(() => Pushizo.Chat.markRead(-1)).toThrow(RangeError);
     expect(await Pushizo.Chat.refreshUnreadCount()).toBe(2);
-    await Pushizo.Chat.leaveOfflineMessage('ali@example.com', 'Arayın');
-    expect(native.chatLeaveOfflineMessage).toHaveBeenCalledWith('ali@example.com', 'Arayın', null);
+    await Pushizo.Chat.leaveOfflineMessage('ali@pushizo.com', 'Arayın');
+    expect(native.chatLeaveOfflineMessage).toHaveBeenCalledWith('ali@pushizo.com', 'Arayın', null);
 
     Pushizo.Chat.setTyping(true);
     Pushizo.Chat.startListening();

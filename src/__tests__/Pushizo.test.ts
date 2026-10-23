@@ -47,7 +47,7 @@ function createNative(): Record<string, jest.Mock> {
     removeSms: resolved(),
     getExternalId: resolved('user_42'),
     getUserId: resolved('hs_1'),
-    getEmails: resolved(['ali@example.com', 5]),
+    getEmails: resolved(['ali@pushizo.com', 5]),
     getSmsNumbers: resolved(['+905321234567']),
     getPreferences: resolved(PREFERENCES_RAW),
     setPreferences: resolved(PREFERENCES_RAW),
@@ -131,8 +131,8 @@ function load(options: { turbo?: boolean; legacy?: boolean } = { turbo: true }) 
 describe('Pushizo (React Native)', () => {
   test('initialize: appId ve tanımlı seçenekler yerel modüle iletilir, izin önbelleği güncellenir', async () => {
     const { Pushizo, LogLevel, env } = load();
-    await Pushizo.initialize('app_1', { apiUrl: 'https://api.example.com', logLevel: LogLevel.Debug, appGroup: undefined });
-    expect(env.native.initialize).toHaveBeenCalledWith('app_1', { apiUrl: 'https://api.example.com', logLevel: 'debug' });
+    await Pushizo.initialize('app_1', { apiUrl: 'https://api.pushizo.com', logLevel: LogLevel.Debug, appGroup: undefined });
+    expect(env.native.initialize).toHaveBeenCalledWith('app_1', { apiUrl: 'https://api.pushizo.com', logLevel: 'debug' });
     expect(Pushizo.Notifications.permission).toBe(true);
     // izin olayı içeride dinlenir; tekrar initialize ikinci abonelik açmaz
     await Pushizo.initialize('app_1');
@@ -279,7 +279,7 @@ describe('Pushizo (React Native)', () => {
     await Pushizo.User.addAlias('crm_id', '42');
     await Pushizo.User.removeAlias('crm_id');
     await Pushizo.User.setLanguage('tr');
-    await Pushizo.User.addEmail('ali@example.com');
+    await Pushizo.User.addEmail('ali@pushizo.com');
     await Pushizo.User.addSms('+905321234567');
     expect(env.native.addTags).toHaveBeenNthCalledWith(1, { plan: 'pro' });
     expect(env.native.addTags).toHaveBeenNthCalledWith(2, { a: '1', b: '2' });
@@ -287,12 +287,12 @@ describe('Pushizo (React Native)', () => {
     expect(env.native.addAliases).toHaveBeenCalledWith({ crm_id: '42' });
     expect(env.native.removeAlias).toHaveBeenCalledWith('crm_id');
     expect(env.native.setLanguage).toHaveBeenCalledWith('tr');
-    expect(env.native.addEmail).toHaveBeenCalledWith('ali@example.com');
+    expect(env.native.addEmail).toHaveBeenCalledWith('ali@pushizo.com');
     expect(env.native.addSms).toHaveBeenCalledWith('+905321234567');
     await expect(Pushizo.User.getTags()).resolves.toEqual({ plan: 'pro', level: '3' });
     await expect(Pushizo.User.getExternalId()).resolves.toBe('user_42');
     await expect(Pushizo.User.getPushizoId()).resolves.toBe('hs_1');
-    await expect(Pushizo.User.getEmails()).resolves.toEqual(['ali@example.com']);
+    await expect(Pushizo.User.getEmails()).resolves.toEqual(['ali@pushizo.com']);
     await expect(Pushizo.User.getSmsNumbers()).resolves.toEqual(['+905321234567']);
   });
 
@@ -445,7 +445,7 @@ describe('Pushizo (React Native)', () => {
     env.emit('Pushizo-notificationClick', {
       notification: { title: 'Kargo', body: 'Yolda', url: null, deliveryId: 'd1', messageId: 'm1', data: { order: '7' }, androidNotificationId: 77 },
       actionId: 'track',
-      url: 'https://example.com/t/7',
+      url: 'https://pushizo.com/t/7',
     });
     expect(listener).toHaveBeenCalledWith({
       notification: {
@@ -458,7 +458,7 @@ describe('Pushizo (React Native)', () => {
         data: { order: '7' },
         androidNotificationId: 77,
       },
-      result: { actionId: 'track', url: 'https://example.com/t/7' },
+      result: { actionId: 'track', url: 'https://pushizo.com/t/7' },
     });
     Pushizo.Notifications.removeEventListener('click', listener);
     expect(env.native.removeListeners).toHaveBeenCalledWith(1);

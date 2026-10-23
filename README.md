@@ -13,17 +13,6 @@
 
 **Pushizo React Native SDK** — React Native and Expo module that wraps the native Pushizo Android and iOS SDKs. The API is compatible with the eski sağlayıcı v5 React Native API; queueing, sessions, delivery receipts and in-app rendering run natively.
 
-> **Status:** Publishing to npm is in progress.<br>
-> **Durum:** npm yayını hazırlanıyor.
-
-**Install from GitHub until then · O zamana kadar GitHub'dan kurulum:**
-
-```bash
-npm install --allow-remote=root https://github.com/pushizo/pushizo-react-native/releases/download/v0.1.0/pushizo-react-native-0.1.0.tgz
-```
-
-**After publication · Yayından sonra:**
-
 ```bash
 npm install @pushizo/react-native
 # Expo: add "@pushizo/react-native" to the plugins in app.json, then
@@ -107,8 +96,8 @@ Bu modül yoksa köprü `com.pushizo:pushizo-android` artefaktını kullanır (M
 ```json
 {
   "expo": {
-    "ios": { "bundleIdentifier": "com.example.app" },
-    "android": { "package": "com.example.app", "googleServicesFile": "./google-services.json" },
+    "ios": { "bundleIdentifier": "com.pushizo.app" },
+    "android": { "package": "com.pushizo.app", "googleServicesFile": "./google-services.json" },
     "plugins": [
       [
         "@pushizo/react-native",
@@ -158,13 +147,13 @@ Geçersiz seçenekler `prebuild` sırasında hangi alanın nasıl düzeltileceğ
 ```ts
 import { Pushizo, LogLevel } from '@pushizo/react-native';
 
-await Pushizo.initialize('app_…', { apiUrl: 'https://api.example.com', logLevel: LogLevel.Warn });
+await Pushizo.initialize('app_…', { apiUrl: 'https://api.pushizo.com', logLevel: LogLevel.Warn });
 await Pushizo.Notifications.requestPermission();
 
 await Pushizo.login('user_42', identityHashFromBackend); // identity verification açıksa hash zorunlu
 await Pushizo.User.addTags({ plan: 'pro', city: 'istanbul' });
 await Pushizo.User.addAlias('crm_id', '1001');
-await Pushizo.User.addEmail('ali@example.com');      // geçersizse INVALID_ARGUMENT
+await Pushizo.User.addEmail('ali@pushizo.com');      // geçersizse INVALID_ARGUMENT
 await Pushizo.User.addSms('+90 532 123 45 67');      // E.164'e normalize edilir
 await Pushizo.User.setLanguage('tr');
 

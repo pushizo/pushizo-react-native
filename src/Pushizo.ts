@@ -594,7 +594,7 @@ const Debug = {
  * çizimi yerel SDK'dadır.
  *
  * ```ts
- * Pushizo.initialize('app_…', { apiUrl: 'https://api.example.com' });
+ * Pushizo.initialize('app_…', { apiUrl: 'https://api.pushizo.com' });
  * await Pushizo.Notifications.requestPermission();
  * Pushizo.login('user_42');
  * Pushizo.User.addTag('plan', 'pro');
