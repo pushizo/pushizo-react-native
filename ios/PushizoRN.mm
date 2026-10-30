@@ -15,7 +15,9 @@
   NSInteger _listenerCount;
 }
 
-RCT_EXPORT_MODULE(Pushizo)
+// RCT_EXPORT_MODULE kendi +load metodunu tanımladığından, aşağıdaki erken başlatma +load ile çakışmasın diye
+// kayıt __attribute__((constructor)) ile yapılır.
+RCT_EXPORT_MODULE_NO_LOAD(Pushizo, PushizoRN)
 
 /// Erken başlatma: Info.plist'te `PushizoAppId` varsa SDK, uygulama açılışı biter bitmez (JS yüklenmeden) başlatılır.
 /// Böylece UNUserNotificationCenter temsilcisi soğuk açılış tıklamasından önce kurulur.
@@ -282,7 +284,7 @@ RCT_EXPORT_METHOD(preventDefault:(NSString *)notificationId)
 
 #pragma mark - Oturum
 
-RCT_EXPORT_METHOD(sendEvent:(NSString *)name properties:(NSDictionary *)properties value:(NSNumber *_Nullable)value)
+RCT_EXPORT_METHOD(sendEvent:(NSString *)name properties:(NSDictionary *)properties value:(NSNumber *)value)
 {
   [[PushizoRNBridge shared] sendEvent:name properties:properties value:value];
 }
@@ -383,8 +385,8 @@ RCT_EXPORT_METHOD(chatGetConversation:(RCTPromiseResolveBlock)resolve reject:(RC
   [[PushizoRNBridge shared] chatGetConversation:resolve reject:reject];
 }
 
-RCT_EXPORT_METHOD(chatGetMessages:(NSNumber *_Nullable)afterSeq
-                  beforeSeq:(NSNumber *_Nullable)beforeSeq
+RCT_EXPORT_METHOD(chatGetMessages:(NSNumber *)afterSeq
+                  beforeSeq:(NSNumber *)beforeSeq
                   limit:(double)limit
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
