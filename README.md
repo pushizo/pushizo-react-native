@@ -28,13 +28,13 @@ The detailed guide below is in Turkish; code samples are language-neutral. Full 
 # @pushizo/react-native
 
 Pushizo React Native SDK'sı: Android (`com.pushizo.sdk`) ve iOS (`Pushizo`) yerel SDK'larını saran köprü ve
-Expo config plugin. Push aboneliği, kullanıcı/tag/alias, e-posta/SMS, bildirim tercihleri, in-app mesajlar, bildirim
-kutusu ve olaylar.
+Expo config plugin. Push aboneliği, kullanıcı/tag/alias, e-posta/SMS, bildirim tercihleri, in-app mesajlar, gömülü
+yerleşimler, özellik bayrakları, bildirim kutusu ve olaylar.
 Yüzey eski sağlayıcı v5 React Native API'si ile uyumludur; kuyruk, oturum, teslimat geri bildirimi
 (received/opened) ve in-app çizimi yerel SDK'dadır.
 
 - React Native ≥ 0.74; **New Architecture** (TurboModule, codegen `RNPushizoSpec`) ve eski mimari desteklenir.
-- Android minSdk 24, iOS 15.0+.
+- Android minSdk 24, iOS 15.0+. Yerel SDK'lar: `com.pushizo:pushizo-android` 0.2.1, `Pushizo` pod `~> 0.2`.
 - Expo: development build (`expo prebuild` / EAS Build). Expo Go yerel modül içermediği için desteklenmez.
 
 ## Kurulum
@@ -262,6 +262,57 @@ yapılandırma gerekmez, tıklama ve yaşam döngüsü olayları mevcut in-app d
 (`supports=html,carousel`) yerel SDK tarafından yapılır; desteklemeyen eski yerel sürümlere sunucu HTML mesaj göndermez
 ve carousel bloklarını çıkarır.
 
+### Gömülü yerleşimler
+
+Pazarlamacının panelde bir yerleşim anahtarına (`ana_sayfa_ust`) bağladığı içerik, uygulamanın ayırdığı alana gelir
+(ADR-0068). Köprü modeli döndürür, çizim uygulamanındır; yerel SDK bu içerik için hazır görünüm sunmaz. Tetikler
+değerlendirilmez ve `display.layout` yok sayılır: alanı açan ve boyutunu belirleyen uygulama kodudur.
+
+```ts
+const [message] = await Pushizo.Placements.list('ana_sayfa_ust');          // limit varsayılan 1; list(key, 3) veya list(key, { limit: 3 })
+if (message) {
+  // message.display.blocks: image | title | body | button | carousel; message.display.buttons: tüm düğmeler
+  renderBanner(message);
+  Pushizo.Placements.reportImpression(message);                            // içerik ekrana çizildiğinde
+}
+onButtonPress((button) => Pushizo.Placements.reportClick(message, button.id)); // ardından button.action'ı uygulayın
+onClose(() => Pushizo.Placements.reportDismiss(message));
+```
+
+| API | Açıklama |
+|-----|----------|
+| `Placements.list(key, limit?)` | `Promise<InAppMessage[]>`; önceliğe göre sıralı. Abonelik yoksa veya gizlilik onayı bekleniyorsa boş liste. Anahtar `^[a-z][a-z0-9_.-]{0,63}$`, `limit` 1-10; kurala uymayan girdi yerel modüle gitmeden `TypeError`/`RangeError` fırlatır. |
+| `Placements.reportImpression(message)` | Gösterim; liste alınınca değil, içerik çizilince çağrılır. |
+| `Placements.reportClick(message, buttonId)` | Düğme tıklaması (`message.display.buttons[i].id`). |
+| `Placements.reportDismiss(message)` | Kullanıcı içeriği kapattı. |
+
+`InAppMessage` yerel SDK modelinin alanlarını taşır: `id`, `priority`, `variantId`, `display` (`layout`, renkler,
+`dismissible`, `autoDismissSeconds`, `contentType`, `html`, `htmlHeight`, `blocks`, `buttons`), `remainingImpressions`,
+`minIntervalSeconds`, `stopAfterInteraction`, `lastImpressionAt`, `endAt`, `language` ve sunucudaki ham JSON (`raw`).
+Düğme aksiyonları (`url`, `deeplink`, `tags`, `push_prompt`, `outcome`, `dismiss`) yerleşimde uygulama tarafından
+yürütülür; raporlar yerel SDK'nın kalıcı kuyruğuyla gider. Rapor çağrıları için yerel katman son `list` sonuçlarını
+kimliğe göre tutar (en çok 50 mesaj); önbellekte olmayan bir mesaj için rapor sessizce yok sayılır (debug log).
+
+### Özellik bayrakları
+
+Bayrak değerleri oturum başında yenilenir ve cihazda saklanır (ADR-0066). Ağ yoksa son değer, hiç alınmadıysa koddaki
+varsayılan döner. Gizlilik onayı beklenirken istek gönderilmez; abonelik yokken yerel SDK kalıcı rastgele kimlik
+kullanır (segmentli bayraklar kapalı döner).
+
+```ts
+if (await Pushizo.FeatureFlags.isEnabled('yeni_sepet')) showNewCart();
+const limit = await Pushizo.FeatureFlags.getValue('sepet_limiti', 10);   // metin, sayı, mantıksal, nesne veya dizi
+const ok = await Pushizo.FeatureFlags.refresh();                        // hemen yenile; false → son değerler korunur
+```
+
+| API | Açıklama |
+|-----|----------|
+| `FeatureFlags.refresh()` | `Promise<boolean>`: yenileme başarılı mı. |
+| `FeatureFlags.isEnabled(key, defaultValue = false)` | `Promise<boolean>`: bayrak bu kullanıcı için açık mı; değer yoksa `defaultValue`. |
+| `FeatureFlags.getValue(key, defaultValue = null)` | `Promise<FeatureFlagValue>`: bayrağın değeri; değer yoksa `defaultValue`. |
+
+> SDK'ya giden değerler uygulama kimliğini bilen herkesçe okunabilir; parola, anahtar veya gizli bilgi yazmayın.
+
 ### Canlı sohbet
 
 ```ts
@@ -323,6 +374,17 @@ Pushizo.Location.setShared(false);                // sunucudaki konum ve rıza k
 - **Silme:** `setShared(false)` sunucuya `location: null` gönderir; konum ve rıza kaydı silinir, bekleyen konum
   gönderilmez.
 
+**Arka plan bölge izleme (ADR-0065).** Varsayılan kapalıdır. Açıkken izlemeyi işletim sistemi yapar; sunucuya koordinat
+gitmez, yalnızca bölgeye giriş ve çıkış kuyruk üzerinden bildirilir. `setShared(true)` açık ve arka plan ("her zaman")
+konum izni verilmiş olmalıdır. Köprü bu izni **istemez** ve manifest/Info.plist'e eklemez; iOS'ta
+`NSLocationAlwaysAndWhenInUseUsageDescription` ve izin akışı, Android'de `ACCESS_BACKGROUND_LOCATION` ve
+`com.google.android.gms:play-services-location` bağımlılığı uygulamanın sorumluluğundadır.
+
+```ts
+Pushizo.Location.setGeofencingEnabled(true);                  // kalıcı tercih
+const enabled = await Pushizo.Location.isGeofencingEnabled(); // izin durumundan bağımsız
+```
+
 ### Gizlilik (KVKK/GDPR)
 
 `initialize(appId, { requiresPrivacyConsent: true })` ile başlatıldığında `Pushizo.setConsentGiven(true)` çağrılana
@@ -360,7 +422,7 @@ NSE; zengin medya (resim), aksiyon düğmeleri, rozet artışı (`badge_inc`) ve
 
   ```ruby
   target 'PushizoNotificationServiceExtension' do
-    pod 'Pushizo/Extension', '~> 0.1'   # yerel geliştirme: :path => '<repo>/sdk/ios'
+    pod 'Pushizo/Extension', '~> 0.2'   # yerel geliştirme: :path => '<repo>/sdk/ios'
   end
   ```
 
@@ -375,6 +437,7 @@ NSE; zengin medya (resim), aksiyon düğmeleri, rozet artışı (`badge_inc`) ve
 | Codegen sözleşmesi | `src/NativePushizo.ts` (TurboModule `Pushizo`) |
 | Android | `android/src/main/java/com/pushizo/reactnative/` (`PushizoModuleImpl`, `PushizoBridge`, `PushizoInitProvider`); `src/newarch` / `src/oldarch` modül kabukları |
 | iOS | `ios/PushizoRN.mm` (ObjC++ kabuk, TurboModule), `ios/PushizoRNBridge.swift` (gövde), `ios/PushizoRNPush.h` |
+| Modeller | `src/types.ts` (`InAppMessage`, `FeatureFlagValue`…), `src/mappers.ts` (yerel harita → tipli model) |
 | Expo | `plugin/src` → `plugin/build`, `app.plugin.js`, `plugin/templates` |
 
 Olaylar: `Pushizo-notificationClick`, `Pushizo-notificationWillDisplay`, `Pushizo-permissionChange`,

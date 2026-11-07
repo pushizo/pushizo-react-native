@@ -511,6 +511,63 @@ RCT_EXPORT_METHOD(requestLocationPermission:(NSString *_Nullable)rationale
   [[PushizoRNBridge shared] requestLocationPermission:rationale resolve:resolve];
 }
 
+RCT_EXPORT_METHOD(setGeofencingEnabled:(BOOL)enabled)
+{
+  [[PushizoRNBridge shared] setGeofencingEnabled:enabled];
+}
+
+RCT_EXPORT_METHOD(isGeofencingEnabled:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] isGeofencingEnabled:resolve];
+}
+
+#pragma mark - Özellik bayrakları
+
+RCT_EXPORT_METHOD(featureFlagsRefresh:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] featureFlagsRefresh:resolve];
+}
+
+RCT_EXPORT_METHOD(featureFlagsIsEnabled:(NSString *)key
+                  defaultValue:(BOOL)defaultValue
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@([[PushizoRNBridge shared] featureFlagsIsEnabled:key defaultValue:defaultValue]));
+}
+
+RCT_EXPORT_METHOD(featureFlagsGetValue:(NSString *)key
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve([[PushizoRNBridge shared] featureFlagsGetValue:key]);
+}
+
+#pragma mark - Gömülü yerleşimler
+
+RCT_EXPORT_METHOD(placementsList:(NSString *)key
+                  limit:(double)limit
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] placementsList:key limit:limit resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(placementsReportImpression:(NSString *)messageId)
+{
+  [[PushizoRNBridge shared] placementsReportImpression:messageId];
+}
+
+RCT_EXPORT_METHOD(placementsReportClick:(NSString *)messageId buttonId:(NSString *)buttonId)
+{
+  [[PushizoRNBridge shared] placementsReportClick:messageId buttonId:buttonId];
+}
+
+RCT_EXPORT_METHOD(placementsReportDismiss:(NSString *)messageId)
+{
+  [[PushizoRNBridge shared] placementsReportDismiss:messageId];
+}
+
 #pragma mark - Hata ayıklama
 
 RCT_EXPORT_METHOD(setLogLevel:(NSString *)level)

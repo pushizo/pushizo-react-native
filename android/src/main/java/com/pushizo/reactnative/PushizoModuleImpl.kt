@@ -17,6 +17,7 @@ import com.facebook.react.modules.core.PermissionListener
 import com.pushizo.sdk.Pushizo
 import com.pushizo.sdk.HsApiException
 import com.pushizo.sdk.HsCallback
+import com.pushizo.sdk.HsInAppMessage
 import com.pushizo.sdk.HsLog
 import com.pushizo.sdk.R
 
@@ -304,6 +305,12 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
         }
     }
 
+    // --- Arka plan bölge izleme (ADR-0065; varsayılan kapalı). Köprü arka plan konum iznini istemez ve manifest'e eklemez. ---
+
+    fun setGeofencingEnabled(enabled: Boolean) = Pushizo.Location.setGeofencingEnabled(enabled)
+
+    fun isGeofencingEnabled(promise: Promise) = promise.resolve(Pushizo.Location.isGeofencingEnabled)
+
     /** Uygulama manifest'inde tanımlı konum izinleri; yalnızca bunlar çalışma zamanında istenebilir. */
     private fun declaredLocationPermissions(): Array<String> = try {
         val info = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
@@ -312,6 +319,63 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
     } catch (e: PackageManager.NameNotFoundException) {
         HsLog.w("uygulama paket bilgisi okunamadı", e)
         emptyArray()
+    }
+
+    // --- Özellik bayrakları (ADR-0066) ---
+
+    fun featureFlagsRefresh(promise: Promise) = Pushizo.FeatureFlags.refresh { promise.resolve(it) }
+
+    fun featureFlagsIsEnabled(key: String, defaultValue: Boolean, promise: Promise) =
+        promise.resolve(Pushizo.FeatureFlags.isEnabled(key, defaultValue))
+
+    /** Değer `{ value }` zarfıyla döner (metin, sayı, mantıksal, nesne, dizi veya null); varsayılan JS katmanında uygulanır. */
+    fun featureFlagsGetValue(key: String, promise: Promise) = guard(promise) {
+        promise.resolve(Arguments.makeNativeMap(mapOf("value" to Pushizo.FeatureFlags.getValue(key).toBridgeValue())))
+    }
+
+    // --- Gömülü yerleşimler (ADR-0068; SDK geri çağrısı arka plan iş parçacığındadır) ---
+
+    /** Geçersiz anahtar veya `limit` yerel SDK doğrulamasından `INVALID_ARGUMENT` ile reddedilir. */
+    fun placementsList(key: String, limit: Double, promise: Promise) = guard(promise) {
+        Pushizo.Placements.list(key, limit.toInt()) { messages ->
+            guard(promise) {
+                rememberPlacements(messages)
+                promise.resolve(Arguments.makeNativeArray(messages.map { it.toMap() }))
+            }
+        }
+    }
+
+    fun placementsReportImpression(messageId: String) {
+        placementMessage(messageId)?.let { Pushizo.Placements.reportImpression(it) }
+    }
+
+    fun placementsReportClick(messageId: String, buttonId: String) {
+        placementMessage(messageId)?.let { Pushizo.Placements.reportClick(it, buttonId) }
+    }
+
+    fun placementsReportDismiss(messageId: String) {
+        placementMessage(messageId)?.let { Pushizo.Placements.reportDismiss(it) }
+    }
+
+    /**
+     * Rapor çağrıları yerel mesaj nesnesi ister; JS yalnızca kimlik taşır. Son `placementsList` sonuçları kimliğe göre
+     * tutulur, sınır aşılınca en eski kayıt düşer.
+     */
+    private val placementMessages = LinkedHashMap<String, HsInAppMessage>()
+
+    private fun rememberPlacements(messages: List<HsInAppMessage>) = synchronized(placementMessages) {
+        for (message in messages) {
+            placementMessages.remove(message.id)
+            placementMessages[message.id] = message
+        }
+        val overflow = placementMessages.size - MAX_PLACEMENT_MESSAGES
+        if (overflow > 0) placementMessages.keys.take(overflow).forEach { placementMessages.remove(it) }
+    }
+
+    private fun placementMessage(messageId: String): HsInAppMessage? {
+        val message = synchronized(placementMessages) { placementMessages[messageId] }
+        if (message == null) HsLog.d("yerleşim raporu atlandı: mesaj önbellekte yok ($messageId)")
+        return message
     }
 
     // --- Canlı sohbet (ADR-0040) ---
@@ -397,6 +461,9 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
         const val NAME = "Pushizo"
         const val PLATFORM_NOT_SUPPORTED = "PLATFORM_NOT_SUPPORTED"
         const val LIVE_ACTIVITIES_IOS_ONLY = "Live Activities yalnızca iOS'ta desteklenir"
+
+        /** Rapor çağrıları için tutulan yerleşim mesajı sayısı üst sınırı. */
+        private const val MAX_PLACEMENT_MESSAGES = 50
 
         /** Ön plan konum izinleri (yerel SDK ile aynı küme); arka plan konumu istenmez. */
         private val LOCATION_PERMISSIONS = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)

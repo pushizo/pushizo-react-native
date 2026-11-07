@@ -280,6 +280,42 @@ class PushizoModule(reactContext: ReactApplicationContext) : NativePushizoSpec(r
         impl.requestLocationPermission(rationale, promise)
     }
 
+    override fun setGeofencingEnabled(enabled: Boolean) {
+        impl.setGeofencingEnabled(enabled)
+    }
+
+    override fun isGeofencingEnabled(promise: Promise) {
+        impl.isGeofencingEnabled(promise)
+    }
+
+    override fun featureFlagsRefresh(promise: Promise) {
+        impl.featureFlagsRefresh(promise)
+    }
+
+    override fun featureFlagsIsEnabled(key: String, defaultValue: Boolean, promise: Promise) {
+        impl.featureFlagsIsEnabled(key, defaultValue, promise)
+    }
+
+    override fun featureFlagsGetValue(key: String, promise: Promise) {
+        impl.featureFlagsGetValue(key, promise)
+    }
+
+    override fun placementsList(key: String, limit: Double, promise: Promise) {
+        impl.placementsList(key, limit, promise)
+    }
+
+    override fun placementsReportImpression(messageId: String) {
+        impl.placementsReportImpression(messageId)
+    }
+
+    override fun placementsReportClick(messageId: String, buttonId: String) {
+        impl.placementsReportClick(messageId, buttonId)
+    }
+
+    override fun placementsReportDismiss(messageId: String) {
+        impl.placementsReportDismiss(messageId)
+    }
+
     override fun setLogLevel(level: String) {
         impl.setLogLevel(level)
     }

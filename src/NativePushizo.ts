@@ -134,6 +134,27 @@ export interface Spec extends TurboModule {
   /** Açıklama diyaloğu (null → SDK'nın yerelleştirilmiş metni) ve "kullanırken" konum izni; sonuç: izin var/verildi mi. */
   requestLocationPermission(rationale: string | null): Promise<boolean>;
 
+  // --- Arka plan bölge izleme (ADR-0065; varsayılan kapalı, köprü izin istemez) ---
+  setGeofencingEnabled(enabled: boolean): void;
+  /** Bölge izleme tercihi (kalıcı; izin durumundan bağımsız). */
+  isGeofencingEnabled(): Promise<boolean>;
+
+  // --- Özellik bayrakları (ADR-0066) ---
+  /** Değerleri hemen yeniler; sonuç: yenileme başarılı mı. */
+  featureFlagsRefresh(): Promise<boolean>;
+  featureFlagsIsEnabled(key: string, defaultValue: boolean): Promise<boolean>;
+  /** Sonuç: { value } (metin, sayı, mantıksal, nesne, dizi veya null); varsayılan JS katmanında uygulanır. */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  featureFlagsGetValue(key: string): Promise<Object>;
+
+  // --- Gömülü yerleşimler (ADR-0068) ---
+  /** Sonuç: in-app mesaj haritaları (`types.ts` → `InAppMessage`); yerel katman rapor çağrıları için mesajları kimliğe göre önbelleğe alır. */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  placementsList(key: string, limit: number): Promise<Array<Object>>;
+  placementsReportImpression(messageId: string): void;
+  placementsReportClick(messageId: string, buttonId: string): void;
+  placementsReportDismiss(messageId: string): void;
+
   // --- Hata ayıklama ---
   setLogLevel(level: string): void;
 

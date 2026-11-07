@@ -266,7 +266,7 @@ describe('iOS dönüşümleri', () => {
     expect(out).toContain("pod 'Pushizo/Extension', :path => '../../../sdk/ios'");
     expect(out).toMatch(/config = use_native_modules!\n# @generated begin pushizo-sdk[^\n]*\n {2}pod 'Pushizo', :path => '..\/..\/..\/sdk\/ios'/);
     const published = applyPodfile(podfile, props);
-    expect(published).toContain("pod 'Pushizo/Extension', '~> 0.1'");
+    expect(published).toContain("pod 'Pushizo/Extension', '~> 0.2'");
     expect(applyPodfile(out, validateProps({ mode: 'development', iosNotificationServiceExtension: false }))).not.toContain(NSE_TARGET);
   });
 

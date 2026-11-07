@@ -352,6 +352,51 @@ class PushizoModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
     }
 
     @ReactMethod
+    fun setGeofencingEnabled(enabled: Boolean) {
+        impl.setGeofencingEnabled(enabled)
+    }
+
+    @ReactMethod
+    fun isGeofencingEnabled(promise: Promise) {
+        impl.isGeofencingEnabled(promise)
+    }
+
+    @ReactMethod
+    fun featureFlagsRefresh(promise: Promise) {
+        impl.featureFlagsRefresh(promise)
+    }
+
+    @ReactMethod
+    fun featureFlagsIsEnabled(key: String, defaultValue: Boolean, promise: Promise) {
+        impl.featureFlagsIsEnabled(key, defaultValue, promise)
+    }
+
+    @ReactMethod
+    fun featureFlagsGetValue(key: String, promise: Promise) {
+        impl.featureFlagsGetValue(key, promise)
+    }
+
+    @ReactMethod
+    fun placementsList(key: String, limit: Double, promise: Promise) {
+        impl.placementsList(key, limit, promise)
+    }
+
+    @ReactMethod
+    fun placementsReportImpression(messageId: String) {
+        impl.placementsReportImpression(messageId)
+    }
+
+    @ReactMethod
+    fun placementsReportClick(messageId: String, buttonId: String) {
+        impl.placementsReportClick(messageId, buttonId)
+    }
+
+    @ReactMethod
+    fun placementsReportDismiss(messageId: String) {
+        impl.placementsReportDismiss(messageId)
+    }
+
+    @ReactMethod
     fun setLogLevel(level: String) {
         impl.setLogLevel(level)
     }

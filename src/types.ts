@@ -178,6 +178,104 @@ export interface PreferenceInput {
   channel?: PreferenceChannel | null;
 }
 
+// --- Özellik bayrakları (ADR-0066) ---
+
+/** Bayrak değeri: metin, sayı, mantıksal, JSON nesnesi/dizisi veya `null`. */
+export type FeatureFlagValue = string | number | boolean | null | FeatureFlagValue[] | { [key: string]: FeatureFlagValue };
+
+// --- Gömülü yerleşimler (ADR-0068): yerel SDK `HsInAppMessage` / `HSInAppMessage` modeli ---
+
+/** In-app tetik koşulu; `unsupported.name` yerel SDK'nın tanımadığı tetik türüdür. Yerleşimlerde tetik değerlendirilmez. */
+export type InAppTrigger =
+  | { kind: 'session_start' }
+  | { kind: 'session_duration'; seconds: number }
+  | { kind: 'event'; name: string }
+  | { kind: 'screen'; name: string }
+  | { kind: 'trigger'; key: string; op: string; value: string | number | null }
+  | { kind: 'unsupported'; name: string };
+
+/** Düğme aksiyonu; yerleşimde aksiyonu uygulama yürütür (`url` http/https, `deeplink` uygulama şeması). */
+export type InAppAction =
+  | { type: 'dismiss' }
+  | { type: 'url'; url: string }
+  | { type: 'deeplink'; url: string }
+  | { type: 'tags'; tags: Record<string, string> }
+  | { type: 'push_prompt' }
+  | { type: 'outcome'; name: string; value: number | null };
+
+export interface InAppButton {
+  id: string;
+  text: string;
+  action: InAppAction;
+  backgroundColor: string | null;
+  textColor: string | null;
+}
+
+/** Carousel kartı; `button` geçersiz aksiyonlu ise `null`. */
+export interface InAppCarouselCard {
+  id: string;
+  title: string;
+  body: string | null;
+  imageUrl: string | null;
+  imageAlt: string | null;
+  button: InAppButton | null;
+}
+
+/** İçerik bloğu; metinler sunucuda kullanıcının dilinde çözülmüştür. */
+export type InAppBlock =
+  | { type: 'image'; url: string; alt: string | null }
+  | { type: 'title'; text: string }
+  | { type: 'body'; text: string }
+  | ({ type: 'button' } & InAppButton)
+  | { type: 'carousel'; id: string; cards: InAppCarouselCard[] };
+
+export type InAppLayout = 'modal' | 'banner_top' | 'banner_bottom' | 'fullscreen';
+export type InAppContentType = 'blocks' | 'html';
+
+export interface InAppDisplay {
+  /** Yerleşimde yok sayılır: boyutu sayfa belirler. */
+  layout: InAppLayout;
+  backgroundColor: string | null;
+  textColor: string | null;
+  dismissible: boolean;
+  autoDismissSeconds: number | null;
+  /** `html` ise `blocks` boştur ve içerik `html` alanındadır. */
+  contentType: InAppContentType;
+  html: string | null;
+  htmlHeight: number | null;
+  blocks: InAppBlock[];
+  /** Düğme blokları ve carousel kartlarının düğmeleri (`reportClick` için `id`). */
+  buttons: InAppButton[];
+}
+
+/** `Placements.list` öğesi; zamanlar epoch milisaniyedir. */
+export interface InAppMessage {
+  id: string;
+  priority: number;
+  /** İlk tetik grubu (geriye uyum). */
+  triggers: InAppTrigger[];
+  /** VEYA ile bağlı gruplar (grup içi VE). */
+  triggerGroups: InAppTrigger[][];
+  /** Sunucunun seçtiği A/B varyantı; rapor çağrılarında yerel katman geri gönderir. */
+  variantId: string | null;
+  display: InAppDisplay;
+  remainingImpressions: number;
+  minIntervalSeconds: number;
+  stopAfterInteraction: boolean;
+  lastImpressionAt: number | null;
+  endAt: number | null;
+  /** Sunucunun içeriği çözdüğü dil. */
+  language: string | null;
+  /** Sunucudaki ham JSON. */
+  raw: Record<string, unknown>;
+}
+
+/** `Placements.list` seçenekleri. */
+export interface PlacementListOptions {
+  /** 1-10 (varsayılan 1). */
+  limit?: number;
+}
+
 /** Yerel olay adları (NativeEventEmitter). Yerel köprülerdeki sabitlerle aynı olmalıdır. */
 export const NativeEvents = {
   Click: 'Pushizo-notificationClick',

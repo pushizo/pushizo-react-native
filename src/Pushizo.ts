@@ -2,6 +2,8 @@ import { EventHub } from './events';
 import { Chat } from './chat';
 import {
   type RawMap,
+  toFeatureFlagValue,
+  toInAppMessages,
   toInboxItem,
   toInboxPage,
   toNotification,
@@ -12,6 +14,8 @@ import {
 } from './mappers';
 import { nativeModule } from './native';
 import {
+  type FeatureFlagValue,
+  type InAppMessage,
   type InAppMessageClickEvent,
   type InAppMessageLifecycleEvent,
   type InboxItem,
@@ -25,6 +29,7 @@ import {
   type NotificationData,
   NativeEvents,
   type PermissionChangeEvent,
+  type PlacementListOptions,
   type PreferenceChannel,
   PreferenceChannels,
   type PreferenceInput,
@@ -112,6 +117,17 @@ function requireLiveActivityValues(value: unknown, name: string, reservedKey?: s
     out[key] = item;
   }
   return out;
+}
+
+/** Yerleşim anahtarı (yerel SDK ve sunucu kuralı): küçük harfle başlar; küçük harf, rakam ve `_ . -`; en çok 64 karakter. */
+const PLACEMENT_KEY = /^[a-z][a-z0-9_.-]{0,63}$/;
+const MAX_PLACEMENT_LIMIT = 10;
+
+/** `Placements.list` sonucundaki mesajın kimliği (rapor çağrıları yerel önbellekte kimlikle eşlenir). */
+function requireMessageId(message: unknown): string {
+  const id = message !== null && typeof message === 'object' ? (message as { id?: unknown }).id : undefined;
+  if (typeof id !== 'string' || id === '') throw new TypeError('Pushizo: message, Placements.list sonucundan bir mesaj olmalı.');
+  return id;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -489,6 +505,57 @@ const InAppMessages = {
   },
 };
 
+/**
+ * Gömülü yerleşimler (ADR-0068): uygulamanın ayırdığı alana içerik. Model döner, çizim uygulamanındır; içerik ekrana
+ * gelince `reportImpression` çağrılır. Rapor çağrıları yerel SDK'nın kalıcı kuyruğuyla gider.
+ */
+const Placements = {
+  /**
+   * Alanın içeriği (önceliğe göre sıralı). Abonelik yoksa veya gizlilik onayı bekleniyorsa boş döner. `limit` 1-10
+   * (varsayılan 1); sayı ya da `{ limit }` olarak verilebilir.
+   */
+  async list(key: string, limit: number | PlacementListOptions = 1): Promise<InAppMessage[]> {
+    if (typeof key !== 'string' || !PLACEMENT_KEY.test(key)) throw new TypeError('Pushizo: geçersiz yerleşim anahtarı.');
+    const count = typeof limit === 'number' ? limit : (limit?.limit ?? 1);
+    if (!Number.isInteger(count) || count < 1 || count > MAX_PLACEMENT_LIMIT) {
+      throw new RangeError(`Pushizo: limit 1-${MAX_PLACEMENT_LIMIT} arası tam sayı olmalı.`);
+    }
+    return toInAppMessages(await nativeModule().placementsList(key, count));
+  },
+  /** İçerik ekrana çizildiğinde çağrılır (gösterim liste alınınca değil, çizilince sayılır). */
+  reportImpression(message: InAppMessage): void {
+    nativeModule().placementsReportImpression(requireMessageId(message));
+  },
+  /** Düğme tıklaması; `buttonId` mesajdaki düğmenin `id` değeridir (`message.display.buttons`). */
+  reportClick(message: InAppMessage, buttonId: string): void {
+    nativeModule().placementsReportClick(requireMessageId(message), requireNonEmpty(buttonId, 'buttonId'));
+  },
+  /** Kullanıcı içeriği kapattığında çağrılır. */
+  reportDismiss(message: InAppMessage): void {
+    nativeModule().placementsReportDismiss(requireMessageId(message));
+  },
+};
+
+/**
+ * Özellik bayrakları (ADR-0066): değerler oturum başında yenilenir ve cihazda saklanır. Ağ yoksa son değer, hiç
+ * alınmadıysa verilen varsayılan döner.
+ */
+const FeatureFlags = {
+  /** Değerleri hemen yeniler; sonuç yenileme başarılı mı (hata veya bekleyen gizlilik onayı `false`, son değerler korunur). */
+  async refresh(): Promise<boolean> {
+    return (await nativeModule().featureFlagsRefresh()) === true;
+  },
+  /** Bayrak bu kullanıcı için açık mı; değer henüz yoksa `defaultValue`. */
+  async isEnabled(key: string, defaultValue = false): Promise<boolean> {
+    return (await nativeModule().featureFlagsIsEnabled(requireNonEmpty(key, 'key'), defaultValue === true)) === true;
+  },
+  /** Bayrağın değeri (metin, sayı, mantıksal, nesne veya dizi); değer yoksa `defaultValue`. */
+  async getValue<T extends FeatureFlagValue = FeatureFlagValue>(key: string, defaultValue: T | null = null): Promise<T | null> {
+    const value = toFeatureFlagValue((await nativeModule().featureFlagsGetValue(requireNonEmpty(key, 'key'))) as RawMap);
+    return value === undefined ? defaultValue : (value as T);
+  },
+};
+
 const Inbox = {
   /** Öğeler (yeniden eskiye), okunmamış sayısı ve sonraki sayfa imleci. */
   async list(options: InboxListOptions = {}): Promise<InboxPage> {
@@ -555,9 +622,10 @@ const LiveActivities = {
 };
 
 /**
- * Konum paylaşımı (v2 Faz 17b; yalnızca ön plan, arka plan konumu yok). Paylaşım açık ve izin verilmişken yerel SDK,
- * oturum başında ve uygulama ön plana döndüğünde en sık 5 dakikada bir konumu push aboneliğine yazar. İzin yoksa veya
- * gizlilik onayı verilmemişse hiçbir şey gönderilmez. İlk konum sunucuda KVKK açık rıza kaydı sayılır.
+ * Konum paylaşımı (v2 Faz 17b; yalnızca ön plan, arka planda koordinat toplanmaz; bölge izleme için
+ * `setGeofencingEnabled`). Paylaşım açık ve izin verilmişken yerel SDK, oturum başında ve uygulama ön plana döndüğünde
+ * en sık 5 dakikada bir konumu push aboneliğine yazar. İzin yoksa veya gizlilik onayı verilmemişse hiçbir şey
+ * gönderilmez. İlk konum sunucuda KVKK açık rıza kaydı sayılır.
  */
 const Location = {
   /** Paylaşımı açar/kapatır (kalıcı tercih). `false` sunucudaki konumu ve rıza kaydını sildirir. */
@@ -579,6 +647,18 @@ const Location = {
     }
     const text = typeof rationale === 'string' && rationale.trim() !== '' ? rationale : null;
     return (await nativeModule().requestLocationPermission(text)) === true;
+  },
+  /**
+   * Arka plan bölge izlemeyi açar/kapatır (ADR-0065; kalıcı tercih, varsayılan kapalı). İzlemeyi işletim sistemi yapar;
+   * sunucuya koordinat gitmez, yalnızca bölgeye giriş ve çıkış bildirilir. `setShared(true)` açık olmalı ve arka plan
+   * ("her zaman") konum izni verilmiş olmalıdır; köprü bu izni istemez ve manifest/Info.plist'e eklemez.
+   */
+  setGeofencingEnabled(enabled: boolean): void {
+    nativeModule().setGeofencingEnabled(enabled === true);
+  },
+  /** Bölge izleme açık mı (kalıcı tercih; izin durumundan bağımsız). */
+  async isGeofencingEnabled(): Promise<boolean> {
+    return (await nativeModule().isGeofencingEnabled()) === true;
   },
 };
 
@@ -648,6 +728,10 @@ export const Pushizo = {
   User,
   Notifications,
   InAppMessages,
+  /** Gömülü yerleşimler (ADR-0068). */
+  Placements,
+  /** Özellik bayrakları (ADR-0066). */
+  FeatureFlags,
   Inbox,
   /** Canlı sohbet (ADR-0040). */
   Chat,

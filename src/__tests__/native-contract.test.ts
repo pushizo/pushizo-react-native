@@ -142,6 +142,70 @@ describe('yerel sözleşme', () => {
     expect(swift).toContain('Pushizo.Location.requestPermission(rationale: text) { granted in resolve(granted) }');
   });
 
+  test('Bölge izleme: yerel Location.setGeofencingEnabled/isGeofencingEnabled; köprü arka plan izni istemez', () => {
+    expect(methods).toEqual(expect.arrayContaining(['setGeofencingEnabled', 'isGeofencingEnabled']));
+    const impl = read('android/src/main/java/com/pushizo/reactnative/PushizoModuleImpl.kt');
+    expect(impl).toContain('fun setGeofencingEnabled(enabled: Boolean) = Pushizo.Location.setGeofencingEnabled(enabled)');
+    expect(impl).toContain('fun isGeofencingEnabled(promise: Promise) = promise.resolve(Pushizo.Location.isGeofencingEnabled)');
+    expect(impl).not.toContain('ACCESS_BACKGROUND_LOCATION');
+    expect(read('android/src/main/AndroidManifest.xml')).not.toContain('LOCATION');
+
+    const mm = read('ios/PushizoRN.mm');
+    expect(mm).toContain('[[PushizoRNBridge shared] setGeofencingEnabled:enabled];');
+    expect(mm).toContain('[[PushizoRNBridge shared] isGeofencingEnabled:resolve];');
+    const swift = read('ios/PushizoRNBridge.swift');
+    expect(swift).toContain('Pushizo.Location.setGeofencingEnabled(enabled)');
+    expect(swift).toContain('resolve(Pushizo.Location.isGeofencingEnabled)');
+    expect(swift).not.toContain('requestAlwaysPermission');
+  });
+
+  test('Özellik bayrakları: yerel FeatureFlags yüzeyine bağlı; değer `{ value }` zarfıyla döner', () => {
+    expect(methods).toEqual(expect.arrayContaining(['featureFlagsRefresh', 'featureFlagsIsEnabled', 'featureFlagsGetValue']));
+    const impl = read('android/src/main/java/com/pushizo/reactnative/PushizoModuleImpl.kt');
+    expect(impl).toContain('Pushizo.FeatureFlags.refresh { promise.resolve(it) }');
+    expect(impl).toContain('promise.resolve(Pushizo.FeatureFlags.isEnabled(key, defaultValue))');
+    expect(impl).toContain('mapOf("value" to Pushizo.FeatureFlags.getValue(key).toBridgeValue())');
+
+    const mm = read('ios/PushizoRN.mm');
+    expect(mm).toContain('[[PushizoRNBridge shared] featureFlagsRefresh:resolve];');
+    expect(mm).toContain('resolve(@([[PushizoRNBridge shared] featureFlagsIsEnabled:key defaultValue:defaultValue]));');
+    expect(mm).toContain('resolve([[PushizoRNBridge shared] featureFlagsGetValue:key]);');
+    const swift = read('ios/PushizoRNBridge.swift');
+    expect(swift).toContain('let ok = await Pushizo.FeatureFlags.refresh()');
+    expect(swift).toContain('Pushizo.FeatureFlags.isEnabled(key, default: defaultValue)');
+    expect(swift).toContain('["value": Pushizo.FeatureFlags.value(key) ?? NSNull()]');
+  });
+
+  test('Gömülü yerleşimler: liste yerel modeli eşler, raporlar kimlikle sınırlı önbellekten çözülür', () => {
+    expect(methods).toEqual(
+      expect.arrayContaining(['placementsList', 'placementsReportImpression', 'placementsReportClick', 'placementsReportDismiss']),
+    );
+    const impl = read('android/src/main/java/com/pushizo/reactnative/PushizoModuleImpl.kt');
+    expect(impl).toContain('Pushizo.Placements.list(key, limit.toInt()) { messages ->');
+    expect(impl).toContain('promise.resolve(Arguments.makeNativeArray(messages.map { it.toMap() }))');
+    expect(impl).toContain('placementMessage(messageId)?.let { Pushizo.Placements.reportImpression(it) }');
+    expect(impl).toContain('placementMessage(messageId)?.let { Pushizo.Placements.reportClick(it, buttonId) }');
+    expect(impl).toContain('placementMessage(messageId)?.let { Pushizo.Placements.reportDismiss(it) }');
+    expect(impl).toContain('private const val MAX_PLACEMENT_MESSAGES = 50');
+    expect(impl).toContain('HsLog.d("yerleşim raporu atlandı: mesaj önbellekte yok ($messageId)")');
+    const mappers = read('android/src/main/java/com/pushizo/reactnative/PushizoMappers.kt');
+    expect(mappers).toContain('internal fun HsInAppMessage.toMap(): Map<String, Any?> = mapOf(');
+    expect(mappers).toContain('"raw" to JSONObject(toJson()).toBridgeValue()');
+
+    const mm = read('ios/PushizoRN.mm');
+    expect(mm).toContain('[[PushizoRNBridge shared] placementsList:key limit:limit resolve:resolve reject:reject];');
+    expect(mm).toContain('[[PushizoRNBridge shared] placementsReportImpression:messageId];');
+    expect(mm).toContain('[[PushizoRNBridge shared] placementsReportClick:messageId buttonId:buttonId];');
+    expect(mm).toContain('[[PushizoRNBridge shared] placementsReportDismiss:messageId];');
+    const swift = read('ios/PushizoRNBridge.swift');
+    expect(swift).toContain('let messages = try await Pushizo.Placements.list(key, limit: Int(limit))');
+    expect(swift).toContain('Pushizo.Placements.reportImpression(message)');
+    expect(swift).toContain('Pushizo.Placements.reportClick(message, buttonId: buttonId)');
+    expect(swift).toContain('Pushizo.Placements.reportDismiss(message)');
+    expect(swift).toContain('private static let maxPlacementMessages = 50');
+    expect(swift).toContain('private static func map(_ m: HSInAppMessage) -> [String: Any]');
+  });
+
   test('Canlı sohbet: yerel Pushizo.Chat yüzeyine bağlı, olaylar ve sohbet açma tıklaması köprüden gelir', () => {
     const chat = methods.filter((m) => m.startsWith('chat'));
     expect(chat.length).toBeGreaterThanOrEqual(16);
