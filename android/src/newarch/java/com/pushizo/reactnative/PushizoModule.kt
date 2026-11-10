@@ -196,6 +196,14 @@ class PushizoModule(reactContext: ReactApplicationContext) : NativePushizoSpec(r
         impl.inboxUnreadCount(promise)
     }
 
+    override fun contentCardsList(limit: Double, promise: Promise) {
+        impl.contentCardsList(limit, promise)
+    }
+
+    override fun contentCardEvent(id: String, event: String, promise: Promise) {
+        impl.contentCardEvent(id, event, promise)
+    }
+
     override fun chatStart(name: String?, email: String?, language: String?, promise: Promise) {
         impl.chatStart(name, email, language, promise)
     }

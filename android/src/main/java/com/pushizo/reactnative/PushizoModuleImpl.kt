@@ -239,6 +239,19 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
 
     fun inboxUnreadCount(promise: Promise) = Pushizo.Inbox.unreadCount(reply(promise) { it })
 
+    fun contentCardsList(limit: Double, promise: Promise) =
+        Pushizo.ContentCards.list(limit.toInt(), reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+
+    fun contentCardEvent(id: String, event: String, promise: Promise) {
+        val callback = reply<com.pushizo.sdk.HsContentCard>(promise) { Arguments.makeNativeMap(it.toMap()) }
+        when (event) {
+            "impression" -> Pushizo.ContentCards.logImpression(id, callback)
+            "click" -> Pushizo.ContentCards.logClick(id, callback)
+            "dismiss" -> Pushizo.ContentCards.dismiss(id, callback)
+            else -> promise.reject("PUSHIZO_INVALID_ARGUMENT", "Kart olayı impression, click veya dismiss olmalı.")
+        }
+    }
+
     // --- Live Activities: iOS (ActivityKit) özelliğidir; Android'de sessizce yok sayılmaz, açık hatayla reddedilir ---
 
     fun setupDefaultLiveActivity(promise: Promise) = rejectLiveActivities(promise)

@@ -504,6 +504,23 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
         inbox(resolve, reject) { try await Pushizo.Inbox.unreadCount() }
     }
 
+    // MARK: İçerik kartları (ADR-0082)
+
+    @objc public func contentCardsList(_ limit: Double, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        inbox(resolve, reject) { try await Self.map(Pushizo.ContentCards.list(limit: Int(limit))) }
+    }
+
+    @objc public func contentCardEvent(_ id: String, event: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        inbox(resolve, reject) {
+            switch event {
+            case "impression": return Self.map(try await Pushizo.ContentCards.logImpression(id))
+            case "click": return Self.map(try await Pushizo.ContentCards.logClick(id))
+            case "dismiss": return Self.map(try await Pushizo.ContentCards.dismiss(id))
+            default: throw HSError.invalidArgument("Kart olayı impression, click veya dismiss olmalı.")
+            }
+        }
+    }
+
     /// Asenkron yerel çağrı (bildirim kutusu, tercihler). Hata kodları: sunucu `HSApiError.code`, kullanım hataları
     /// `NOT_READY` / `INVALID_ARGUMENT`.
     private func inbox(_ resolve: @escaping (Any?) -> Void, _ reject: @escaping (String, String, Error?) -> Void, _ body: @escaping () async throws -> Any?) {
@@ -681,6 +698,17 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
         ["id": item.id, "messageId": item.messageId ?? NSNull(), "title": item.title ?? NSNull(), "body": item.body ?? NSNull(),
          "url": item.url ?? NSNull(), "imageUrl": item.imageUrl ?? NSNull(), "data": item.data, "read": item.read,
          "readAt": millis(item.readAt), "archivedAt": millis(item.archivedAt), "expiresAt": millis(item.expiresAt), "createdAt": millis(item.createdAt)]
+    }
+
+    private static func map(_ card: HSContentCard) -> [String: Any] {
+        ["id": card.id, "messageId": card.messageId ?? NSNull(), "type": card.type.rawValue, "title": card.title ?? NSNull(),
+         "body": card.body ?? NSNull(), "url": card.url ?? NSNull(), "imageUrl": card.imageUrl ?? NSNull(),
+         "buttonText": card.buttonText ?? NSNull(), "data": card.data, "pinned": card.pinned, "priority": card.priority,
+         "viewed": card.viewed, "clicked": card.clicked, "expiresAt": millis(card.expiresAt), "createdAt": millis(card.createdAt)]
+    }
+
+    private static func map(_ feed: HSContentCardFeed) -> [String: Any] {
+        ["cards": feed.cards.map { map($0) }, "unviewedCount": feed.unviewedCount]
     }
 
     private static func map(_ page: HSInboxPage) -> [String: Any] {

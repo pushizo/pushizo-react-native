@@ -8,6 +8,9 @@ import type {
   InAppLayout,
   InAppMessage,
   InAppTrigger,
+  ContentCard,
+  ContentCardFeed,
+  ContentCardType,
   InboxItem,
   InboxPage,
   NotificationData,
@@ -75,6 +78,37 @@ export function toInboxItem(raw: RawMap): InboxItem {
     expiresAt: num(m.expiresAt),
     createdAt: num(m.createdAt),
   };
+}
+
+const CARD_TYPES: readonly ContentCardType[] = ['classic', 'captioned_image', 'image_only'];
+
+/** Kart (ADR-0082); bilinmeyen tür klasik sayılır (yerel SDK ile aynı). */
+export function toContentCard(raw: RawMap): ContentCard {
+  const m = raw ?? {};
+  const type = str(m.type);
+  return {
+    id: str(m.id) ?? '',
+    messageId: str(m.messageId),
+    type: type && (CARD_TYPES as readonly string[]).includes(type) ? (type as ContentCardType) : 'classic',
+    title: str(m.title),
+    body: str(m.body),
+    url: str(m.url),
+    imageUrl: str(m.imageUrl),
+    buttonText: str(m.buttonText),
+    data: toStringMap(m.data),
+    pinned: m.pinned === true,
+    priority: num(m.priority) ?? 0,
+    viewed: m.viewed === true,
+    clicked: m.clicked === true,
+    expiresAt: num(m.expiresAt),
+    createdAt: num(m.createdAt),
+  };
+}
+
+export function toContentCardFeed(raw: RawMap): ContentCardFeed {
+  const m = raw ?? {};
+  const cards = Array.isArray(m.cards) ? (m.cards as RawMap[]).map(toContentCard) : [];
+  return { cards, unviewedCount: num(m.unviewedCount) ?? cards.filter((c) => !c.viewed).length };
 }
 
 export function toInboxPage(raw: RawMap): InboxPage {

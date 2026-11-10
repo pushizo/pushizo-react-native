@@ -362,6 +362,23 @@ RCT_EXPORT_METHOD(inboxUnreadCount:(RCTPromiseResolveBlock)resolve reject:(RCTPr
   [[PushizoRNBridge shared] inboxUnreadCount:resolve reject:reject];
 }
 
+#pragma mark - İçerik kartları
+
+RCT_EXPORT_METHOD(contentCardsList:(double)limit
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] contentCardsList:limit resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(contentCardEvent:(NSString *)id
+                  event:(NSString *)event
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] contentCardEvent:id event:event resolve:resolve reject:reject];
+}
+
 #pragma mark - Canlı sohbet
 
 RCT_EXPORT_METHOD(chatStart:(NSString *_Nullable)name

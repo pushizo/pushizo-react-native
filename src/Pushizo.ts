@@ -4,6 +4,8 @@ import {
   type RawMap,
   toFeatureFlagValue,
   toInAppMessages,
+  toContentCard,
+  toContentCardFeed,
   toInboxItem,
   toInboxPage,
   toNotification,
@@ -18,6 +20,8 @@ import {
   type InAppMessage,
   type InAppMessageClickEvent,
   type InAppMessageLifecycleEvent,
+  type ContentCard,
+  type ContentCardFeed,
   type InboxItem,
   type InboxListOptions,
   type InboxPage,
@@ -580,6 +584,27 @@ const Inbox = {
   },
 };
 
+/** İçerik kartları (ADR-0082): kalıcı kart akışı; kartlar bildirim kutusu listesinde görünmez. */
+const ContentCards = {
+  /** Kart akışı (sabitlenmiş → öncelik → yeni; `limit` 1-100, varsayılan 50). */
+  async list(limit = 50): Promise<ContentCardFeed> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new RangeError('Pushizo: limit 1-100 arası tam sayı olmalı.');
+    return toContentCardFeed((await nativeModule().contentCardsList(limit)) as RawMap);
+  },
+  /** Kart ekranda gösterildi (ilk gösterim kaydedilir). */
+  async logImpression(id: string): Promise<ContentCard> {
+    return toContentCard((await nativeModule().contentCardEvent(requireNonEmpty(id, 'id'), 'impression')) as RawMap);
+  },
+  /** Karta tıklandı (gösterim ve okundu da sayılır). */
+  async logClick(id: string): Promise<ContentCard> {
+    return toContentCard((await nativeModule().contentCardEvent(requireNonEmpty(id, 'id'), 'click')) as RawMap);
+  },
+  /** Kart kapatıldı; akıştan kalkar. */
+  async dismiss(id: string): Promise<ContentCard> {
+    return toContentCard((await nativeModule().contentCardEvent(requireNonEmpty(id, 'id'), 'dismiss')) as RawMap);
+  },
+};
+
 const Session = {
   /** Özel olay / outcome; adı in-app `event` tetiklerini de çalıştırır. */
   sendEvent(name: string, properties: Record<string, unknown> = {}, value?: number): void {
@@ -733,6 +758,8 @@ export const Pushizo = {
   /** Özellik bayrakları (ADR-0066). */
   FeatureFlags,
   Inbox,
+  /** İçerik kartları (ADR-0082). */
+  ContentCards,
   /** Canlı sohbet (ADR-0040). */
   Chat,
   Session,

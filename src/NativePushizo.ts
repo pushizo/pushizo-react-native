@@ -89,6 +89,12 @@ export interface Spec extends TurboModule {
   inboxArchive(id: string): Promise<void>;
   inboxUnreadCount(): Promise<number>;
 
+  // --- İçerik kartları (ADR-0082) ---
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır.
+  contentCardsList(limit: number): Promise<Object>;
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır.
+  contentCardEvent(id: string, event: string): Promise<Object>;
+
   // --- Canlı sohbet (ADR-0040) ---
   /** Sonuç: { userId, conversation } */
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.

@@ -10,6 +10,8 @@ import com.pushizo.sdk.HsInAppCarouselCard
 import com.pushizo.sdk.HsInAppDisplay
 import com.pushizo.sdk.HsInAppMessage
 import com.pushizo.sdk.HsInAppTrigger
+import com.pushizo.sdk.HsContentCard
+import com.pushizo.sdk.HsContentCardFeed
 import com.pushizo.sdk.HsInboxItem
 import com.pushizo.sdk.HsInboxPage
 import com.pushizo.sdk.HsLog
@@ -51,6 +53,26 @@ internal fun HsInboxItem.toMap(): Map<String, Any?> = mapOf(
     "expiresAt" to expiresAt,
     "createdAt" to createdAt,
 )
+
+internal fun HsContentCard.toMap(): Map<String, Any?> = mapOf(
+    "id" to id,
+    "messageId" to messageId,
+    "type" to type.wire,
+    "title" to title,
+    "body" to body,
+    "url" to url,
+    "imageUrl" to imageUrl,
+    "buttonText" to buttonText,
+    "data" to data,
+    "pinned" to pinned,
+    "priority" to priority,
+    "viewed" to viewed,
+    "clicked" to clicked,
+    "expiresAt" to expiresAt,
+    "createdAt" to createdAt,
+)
+
+internal fun HsContentCardFeed.toMap(): Map<String, Any?> = mapOf("cards" to cards.map { it.toMap() }, "unviewedCount" to unviewedCount)
 
 internal fun HsInboxPage.toMap(): Map<String, Any?> =
     mapOf("items" to items.map { it.toMap() }, "unreadCount" to unreadCount, "nextCursor" to nextCursor, "hasMore" to hasMore)

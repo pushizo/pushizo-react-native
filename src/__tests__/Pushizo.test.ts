@@ -123,6 +123,14 @@ function createNative(): Record<string, jest.Mock> {
     inboxMarkAllRead: resolved(0),
     inboxArchive: resolved(),
     inboxUnreadCount: resolved(4),
+    contentCardsList: resolved({
+      cards: [
+        { id: 'c1', messageId: 'm1', type: 'captioned_image', title: 'Kart', body: null, url: 'app://x', imageUrl: 'https://cdn/x.png', buttonText: 'İncele', data: {}, pinned: true, priority: 70, viewed: false, clicked: false, expiresAt: null, createdAt: 1700000000000 },
+        { id: 'c2', type: 'yeni-tur', viewed: true },
+      ],
+      unviewedCount: 1,
+    }),
+    contentCardEvent: resolved({ id: 'c1', type: 'classic', viewed: true, clicked: true, data: {} }),
     setupDefaultLiveActivity: resolved(),
     startDefaultLiveActivity: resolved(),
     setLocationShared: jest.fn(),
@@ -777,6 +785,23 @@ describe('Pushizo (React Native)', () => {
     await Pushizo.Inbox.archive('i1');
     expect(env.native.inboxArchive).toHaveBeenCalledWith('i1');
     await expect(Pushizo.Inbox.unreadCount()).resolves.toBe(4);
+  });
+
+  test('ContentCards (ADR-0082): akış ayrıştırılır, bilinmeyen tür klasik, olaylar yerel köprüye gider', async () => {
+    const { Pushizo, env } = load();
+    const feed = await Pushizo.ContentCards.list(20);
+    expect(env.native.contentCardsList).toHaveBeenCalledWith(20);
+    expect(feed.unviewedCount).toBe(1);
+    expect(feed.cards[0]).toMatchObject({ id: 'c1', type: 'captioned_image', buttonText: 'İncele', pinned: true, priority: 70 });
+    expect(feed.cards[1]).toMatchObject({ id: 'c2', type: 'classic', viewed: true, priority: 0 });
+    await expect(Pushizo.ContentCards.list(0)).rejects.toThrow('limit');
+    await expect(Pushizo.ContentCards.logClick('c1')).resolves.toMatchObject({ id: 'c1', clicked: true });
+    expect(env.native.contentCardEvent).toHaveBeenLastCalledWith('c1', 'click');
+    await Pushizo.ContentCards.logImpression('c1');
+    expect(env.native.contentCardEvent).toHaveBeenLastCalledWith('c1', 'impression');
+    await Pushizo.ContentCards.dismiss('c1');
+    expect(env.native.contentCardEvent).toHaveBeenLastCalledWith('c1', 'dismiss');
+    await expect(Pushizo.ContentCards.dismiss('')).rejects.toThrow();
   });
 
   test('Session.sendEvent ve Debug.setLogLevel', () => {

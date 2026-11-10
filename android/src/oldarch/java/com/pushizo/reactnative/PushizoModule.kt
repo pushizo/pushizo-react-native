@@ -247,6 +247,16 @@ class PushizoModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
     }
 
     @ReactMethod
+    fun contentCardsList(limit: Double, promise: Promise) {
+        impl.contentCardsList(limit, promise)
+    }
+
+    @ReactMethod
+    fun contentCardEvent(id: String, event: String, promise: Promise) {
+        impl.contentCardEvent(id, event, promise)
+    }
+
+    @ReactMethod
     fun chatStart(name: String?, email: String?, language: String?, promise: Promise) {
         impl.chatStart(name, email, language, promise)
     }
