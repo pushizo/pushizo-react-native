@@ -13,6 +13,7 @@ import {
   toStringArray,
   toStringMap,
   toSubscriptionState,
+  toUserConsents,
   toUserPreferences,
 } from './mappers';
 import { nativeModule } from './native';
@@ -43,7 +44,9 @@ import {
   PreferenceChannels,
   type PreferenceInput,
   type PushSubscriptionChangedState,
+  type UserConsent,
   type UserPreferences,
+  type UserProfile,
 } from './types';
 
 const LOG_LEVELS: readonly string[] = Object.values(LogLevel);
@@ -70,6 +73,18 @@ function requireStringArray(value: unknown, name: string): string[] {
     throw new TypeError(`Pushizo: ${name} metin dizisi olmalı.`);
   }
   return value as string[];
+}
+
+/** `login` profili: yalnızca verilen alanlar yerel katmana gider; tip hataları girişten önce fırlatılır. */
+function requireUserProfile(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Pushizo: profile bir nesne olmalı.');
+  const { email, sms, tags, aliases } = value as UserProfile;
+  const out: Record<string, unknown> = {};
+  if (email !== undefined && email !== null) out.email = requireNonEmpty(email, 'profile.email');
+  if (sms !== undefined && sms !== null) out.sms = requireNonEmpty(sms, 'profile.sms');
+  if (tags !== undefined && tags !== null) out.tags = requireStringMap(tags, 'profile.tags');
+  if (aliases !== undefined && aliases !== null) out.aliases = requireStringMap(aliases, 'profile.aliases');
+  return out;
 }
 
 const MAX_PREFERENCES = 100;
@@ -410,6 +425,38 @@ const User = {
       .setPreferences(inputs)
       .then((raw) => toUserPreferences(raw as RawMap));
   },
+  /**
+   * Reklam kişiselleştirme rızası (ADR-0037): `true` iken kullanıcının e-posta/telefon özeti app'in bağladığı reklam
+   * platformlarının kitlelerine gönderilebilir; `false` rızayı geri alır (sonraki kitle senkronunda çıkarılır). Güncel
+   * tercihleri döndürür.
+   */
+  async setAdsPersonalizationConsent(granted: boolean): Promise<UserPreferences> {
+    if (typeof granted !== 'boolean') throw new TypeError('Pushizo: granted mantıksal değer olmalı.');
+    return toUserPreferences((await nativeModule().setAdsPersonalizationConsent(granted)) as RawMap);
+  },
+  /** Rıza kayıtları (`ads_personalization` …). Abonelik henüz kaydedilmediyse `NOT_READY` koduyla reddedilir. */
+  async getConsents(): Promise<UserConsent[]> {
+    return toUserConsents(await nativeModule().getConsents());
+  },
+  /**
+   * Fire OS ADM kayıt kimliği (yalnızca Android; ana FCM aboneliğinin yerine geçmez). ADM kaydını kendisi yapan
+   * uygulamalar içindir. Geçersiz kimlik `INVALID_ARGUMENT` ile reddedilir; iOS'ta etkisizdir.
+   */
+  registerAdm(token: string): Promise<void> {
+    return nativeModule().registerAdm(requireNonEmpty(token, 'token'));
+  },
+};
+
+/**
+ * Mobil reklam kimliği (GAID / IDFA; ADR-0037). SDK reklam kitaplığı ve ATT istemi içermez: kimliği uygulama alır ve
+ * verir. Kimlik yalnızca `ads_personalization` rızası olan kullanıcıda ve SHA-256 özetiyle reklam kitlesine gönderilir.
+ */
+const Ads = {
+  /** Reklam kimliğini yazar; `null`, boş metin veya sıfır kimlik sunucudaki kaydı siler. */
+  setAdvertisingId(id: string | null): void {
+    if (id !== null && id !== undefined && typeof id !== 'string') throw new TypeError('Pushizo: id metin veya null olmalı.');
+    nativeModule().setAdvertisingId(typeof id === 'string' && id.trim() !== '' ? id : null);
+  },
 };
 
 const Notifications = {
@@ -446,6 +493,18 @@ const Notifications = {
   /** Aynı gruptaki bildirimleri kaldırır (Android `android_group`, iOS `thread-id`). */
   removeGroupedNotifications(group: string): Promise<void> {
     return nativeModule().removeGroupedNotifications(requireNonEmpty(group, 'group'));
+  },
+  /**
+   * Uygulama rozetini ayarlar (yalnızca iOS; bildirim servis uzantısıyla paylaşılan sayaç da eşitlenir). Android'de
+   * rozet görünen bildirimlerden hesaplandığı için çağrı etkisizdir.
+   */
+  setBadgeCount(count: number): void {
+    if (!Number.isInteger(count) || count < 0) throw new RangeError('Pushizo: count negatif olmayan tam sayı olmalı.');
+    nativeModule().setBadgeCount(count);
+  },
+  /** Rozeti sıfırlar (yalnızca iOS; Android'de etkisiz). */
+  clearBadge(): void {
+    nativeModule().setBadgeCount(0);
   },
   addEventListener<K extends keyof NotificationEventMap>(event: K, listener: (e: NotificationEventMap[K]) => void): void {
     const hub = notificationHubs[event] as unknown as EventHub<unknown, NotificationEventMap[K]> | undefined;
@@ -678,6 +737,31 @@ const Location = {
     const text = typeof rationale === 'string' && rationale.trim() !== '' ? rationale : null;
     return (await nativeModule().requestLocationPermission(text)) === true;
   },
+  /** Yaklaşık veya hassas konum izni ("kullanırken" ya da "her zaman") verilmiş mi. */
+  async permissionGranted(): Promise<boolean> {
+    return (await nativeModule().locationPermissionGranted()) === true;
+  },
+  /** Arka plan ("her zaman") konum izni verilmiş mi (bölge izleme için gerekir). */
+  async backgroundPermissionGranted(): Promise<boolean> {
+    return (await nativeModule().locationBackgroundPermissionGranted()) === true;
+  },
+  /**
+   * Arka plan konum iznini ister (bölge izleme için). Android: önce açıklama diyaloğu (`rationale`, verilmezse SDK'nın
+   * yerelleştirilmiş metni), sonra `ACCESS_BACKGROUND_LOCATION` (Android 11+ sistem Ayarlar ekranını açar; Android 9 ve
+   * öncesinde normal konum izni yeterlidir). iOS: "her zaman" izni (`rationale` yok sayılır). Önce `requestPermission`
+   * ile ön plan izni alınmış olmalıdır. Sonuç: izin var mı / verildi mi; manifest/Info.plist'te izin tanımlı değilse `false`.
+   */
+  async requestBackgroundPermission(rationale?: string): Promise<boolean> {
+    if (rationale !== undefined && rationale !== null && typeof rationale !== 'string') {
+      throw new TypeError('Pushizo: rationale metin olmalı.');
+    }
+    const text = typeof rationale === 'string' && rationale.trim() !== '' ? rationale : null;
+    return (await nativeModule().requestBackgroundLocationPermission(text)) === true;
+  },
+  /** `requestBackgroundPermission` ile aynı izin (iOS adıyla): iOS "her zaman", Android arka plan konum izni. */
+  requestAlwaysPermission(): Promise<boolean> {
+    return Location.requestBackgroundPermission();
+  },
   /**
    * Arka plan bölge izlemeyi açar/kapatır (ADR-0065; kalıcı tercih, varsayılan kapalı). İzlemeyi işletim sistemi yapar;
    * sunucuya koordinat gitmez, yalnızca bölgeye giriş ve çıkış bildirilir. `setShared(true)` açık olmalı ve arka plan
@@ -777,16 +861,22 @@ export const Pushizo = {
 
   /**
    * Anonim kullanıcıyı kimlikli kullanıcıya bağlar. Identity verification açıksa app moduna göre `identityHash`
-   * (eski imza: ikinci argüman metin) ve/veya JWT gerekir: `login(id, { jwt })`.
+   * (eski imza: ikinci argüman metin) ve/veya JWT gerekir: `login(id, { jwt })`. `profile` verilirse e-posta, SMS, tag
+   * ve alias'lar aynı çağrıda ayarlanır: `login(id, { profile: { email: 'ali@ornek.com' } })`.
    */
   login(externalId: string, proof?: string | LoginOptions): Promise<void> {
     const options: LoginOptions = typeof proof === 'string' ? { identityHash: proof } : (proof ?? {});
     if (options.jwt !== undefined) requireNonEmpty(options.jwt, 'jwt');
-    return nativeModule().login(
-      requireNonEmpty(externalId, 'externalId'),
-      options.identityHash ?? null,
-      options.jwt ?? null,
-    );
+    const id = requireNonEmpty(externalId, 'externalId');
+    if (options.profile !== undefined && options.profile !== null) {
+      // Profil (e-posta, SMS, tag, alias) girişle aynı yerel çağrıda ayarlanır; geçersiz adres girişten önce reddedilir.
+      return nativeModule().loginWithProfile(id, requireUserProfile(options.profile), options.identityHash ?? null, options.jwt ?? null);
+    }
+    return nativeModule().login(id, options.identityHash ?? null, options.jwt ?? null);
+  },
+  /** SDK başlatıldı mı (`initialize` tamamlandı ya da yerel otomatik başlatma yapıldı). */
+  async isInitialized(): Promise<boolean> {
+    return (await nativeModule().isInitialized()) === true;
   },
   /** Süresi dolan kimlik JWT'sini yeniler (giriş yapmış kullanıcı için); sonraki SDK istekleri yeni belirteci taşır. */
   updateUserJwt(jwt: string): Promise<void> {
@@ -816,6 +906,8 @@ export const Pushizo = {
   Session,
   LiveActivities,
   Location,
+  /** Mobil reklam kimliği (ADR-0037). */
+  Ads,
   /** Android teslimat güçlendirme (ADR-0092). */
   Delivery,
   Debug,

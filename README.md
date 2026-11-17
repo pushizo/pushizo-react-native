@@ -337,6 +337,30 @@ await Pushizo.Delivery.openSettings('auto_start');      // kendi arayüzünüzde
 Yalnızca Android'de etkilidir: iOS'ta `status()` `supported: false` ve `risk: 'none'` döner, `openSettings` ile `showGuidance`
 hiçbir şey yapmadan `false` döner. Köprü `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` iznini istemez ve manifest'e eklemez.
 
+### Rıza, reklam kimliği ve rozet
+
+```ts
+await Pushizo.login('user_42', { profile: { email: 'ali@ornek.com', sms: '+905321234567', tags: { plan: 'pro' } } });
+
+await Pushizo.User.setAdsPersonalizationConsent(true); // güncel tercihleri döndürür (consents dahil)
+const consents = await Pushizo.User.getConsents();     // [{ purpose, granted, source, updatedAt }]
+Pushizo.Ads.setAdvertisingId(idfaOrGaid);              // null kaydı siler
+
+Pushizo.Notifications.setBadgeCount(3);                // iOS; Android'de etkisiz
+Pushizo.Notifications.clearBadge();
+```
+
+| Metot | Açıklama |
+|---|---|
+| `login(externalId, { identityHash?, jwt?, profile? })` | `profile`: `{ email?, sms?, tags?, aliases? }`; girişle aynı çağrıda ayarlanır. Geçersiz e-posta/telefon girişten önce `INVALID_ARGUMENT` ile reddedilir. |
+| `isInitialized()` | `Promise<boolean>`: yerel SDK başlatıldı mı. |
+| `User.setAdsPersonalizationConsent(granted)` | `Promise<UserPreferences>`: e-posta/telefon özetinin reklam platformu kitlelerine gönderilmesine rıza (ADR-0037); `false` rızayı geri alır. |
+| `User.getConsents()` | `Promise<UserConsent[]>`: rıza kayıtları (`purpose`, `granted`, `source`, `updatedAt`). `getPreferences()` sonucu da `consents` içerir. |
+| `Ads.setAdvertisingId(id \| null)` | GAID / IDFA. Kimliği uygulama alır (SDK reklam kitaplığı ve ATT istemi içermez); yalnızca rıza varken ve SHA-256 özetiyle kullanılır. `null` kaydı siler. |
+| `Notifications.setBadgeCount(count)` / `clearBadge()` | iOS uygulama rozeti (NSE ile paylaşılan sayaç dahil). Android'de rozet görünen bildirimlerden hesaplandığından etkisizdir. |
+| `User.registerAdm(token)` | Fire OS ADM kayıt kimliği (ADM kaydını kendisi yapan uygulamalar için); iOS'ta etkisizdir. |
+| `Chat.isListening()` | `Promise<boolean>`: gerçek zamanlı sohbet akışı açık mı. |
+
 ### Canlı sohbet
 
 ```ts
@@ -392,7 +416,7 @@ Pushizo.Location.setShared(false);                // sunucudaki konum ve rıza k
   ```
 
   Manifest'te konum izni yoksa `requestPermission` uyarı loglar ve `false` döner; ön planda `ReactActivity` yoksa
-  `NO_ACTIVITY` ile reddedilir. `ACCESS_BACKGROUND_LOCATION` gerekmez ve istenmez.
+  `NO_ACTIVITY` ile reddedilir. Ön plan paylaşımı için `ACCESS_BACKGROUND_LOCATION` gerekmez.
 - **KVKK:** sunucuya ulaşan ilk konum açık rıza kaydı olarak saklanır; açıklama metninde amacı açıkça belirtin.
   `requiresPrivacyConsent` ile başlatıldıysa `setConsentGiven(true)` gelene kadar konum gönderilmez.
 - **Silme:** `setShared(false)` sunucuya `location: null` gönderir; konum ve rıza kaydı silinir, bekleyen konum
@@ -400,14 +424,25 @@ Pushizo.Location.setShared(false);                // sunucudaki konum ve rıza k
 
 **Arka plan bölge izleme (ADR-0065).** Varsayılan kapalıdır. Açıkken izlemeyi işletim sistemi yapar; sunucuya koordinat
 gitmez, yalnızca bölgeye giriş ve çıkış kuyruk üzerinden bildirilir. `setShared(true)` açık ve arka plan ("her zaman")
-konum izni verilmiş olmalıdır. Köprü bu izni **istemez** ve manifest/Info.plist'e eklemez; iOS'ta
-`NSLocationAlwaysAndWhenInUseUsageDescription` ve izin akışı, Android'de `ACCESS_BACKGROUND_LOCATION` ve
-`com.google.android.gms:play-services-location` bağımlılığı uygulamanın sorumluluğundadır.
+konum izni verilmiş olmalıdır. Köprü bu izni manifest/Info.plist'e **eklemez**: iOS'ta
+`NSLocationAlwaysAndWhenInUseUsageDescription`, Android'de `ACCESS_BACKGROUND_LOCATION` ve
+`com.google.android.gms:play-services-location` bağımlılığı uygulamanın sorumluluğundadır. İzin
+`requestBackgroundPermission` ile istenir.
 
 ```ts
+if (!(await Pushizo.Location.backgroundPermissionGranted())) {
+  await Pushizo.Location.requestBackgroundPermission('Mağazaya yaklaşınca haber verelim.');
+}
 Pushizo.Location.setGeofencingEnabled(true);                  // kalıcı tercih
 const enabled = await Pushizo.Location.isGeofencingEnabled(); // izin durumundan bağımsız
 ```
+
+| API | Açıklama |
+|-----|----------|
+| `Location.permissionGranted()` | `Promise<boolean>`: yaklaşık veya hassas konum izni ("kullanırken" ya da "her zaman") verilmiş mi. |
+| `Location.backgroundPermissionGranted()` | `Promise<boolean>`: arka plan ("her zaman") konum izni verilmiş mi. |
+| `Location.requestBackgroundPermission(rationale?)` | `Promise<boolean>`: Android'de açıklama diyaloğu, ardından `ACCESS_BACKGROUND_LOCATION` (Android 11+ Ayarlar ekranı açılır; Android 9 ve öncesinde normal konum izni; manifest'te yoksa `false`). iOS'ta "her zaman" izni (`rationale` kullanılmaz). Önce `requestPermission` ile ön plan izni alınmalıdır. |
+| `Location.requestAlwaysPermission()` | `requestBackgroundPermission()` ile aynı izin (iOS adıyla); iki platformda da çalışır. |
 
 ### Gizlilik (KVKK/GDPR)
 

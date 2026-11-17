@@ -18,7 +18,9 @@ import com.pushizo.sdk.HsInboxPage
 import com.pushizo.sdk.HsLog
 import com.pushizo.sdk.HsMessageCategory
 import com.pushizo.sdk.HsNotification
+import com.pushizo.sdk.HsConsent
 import com.pushizo.sdk.HsPreference
+import com.pushizo.sdk.HsUserProfile
 import com.pushizo.sdk.HsPreferenceInput
 import com.pushizo.sdk.HsPreferencesResult
 import com.pushizo.sdk.HsPushSubscriptionState
@@ -117,7 +119,28 @@ internal fun HsMessageCategory.toMap(): Map<String, Any?> = mapOf(
 )
 
 internal fun HsPreferencesResult.toMap(): Map<String, Any?> =
-    mapOf("preferences" to preferences.map { it.toMap() }, "categories" to categories.map { it.toMap() })
+    mapOf(
+        "preferences" to preferences.map { it.toMap() },
+        "categories" to categories.map { it.toMap() },
+        "consents" to consents.map { it.toMap() },
+    )
+
+internal fun HsConsent.toMap(): Map<String, Any?> =
+    mapOf("purpose" to purpose, "granted" to granted, "source" to source, "updatedAt" to updatedAt)
+
+/** JS `login` profili → yerel [HsUserProfile]; metin olmayan alanlar yok sayılır (JS katmanı tipleri doğrular). */
+internal fun ReadableMap.toUserProfile(): HsUserProfile = HsUserProfile(
+    email = stringOrNull("email"),
+    sms = stringOrNull("sms"),
+    tags = mapOrNull("tags")?.toStringMap().orEmpty(),
+    aliases = mapOrNull("aliases")?.toStringMap().orEmpty(),
+)
+
+private fun ReadableMap.stringOrNull(key: String): String? =
+    if (hasKey(key) && getType(key) == ReadableType.String) getString(key) else null
+
+private fun ReadableMap.mapOrNull(key: String): ReadableMap? =
+    if (hasKey(key) && getType(key) == ReadableType.Map) getMap(key) else null
 
 /** `org.json` değeri → köprüye yazılabilir değer (Map, List, metin, sayı, mantıksal); `JSONObject.NULL` null olur. */
 internal fun Any?.toBridgeValue(): Any? = when (this) {

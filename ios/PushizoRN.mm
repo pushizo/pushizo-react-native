@@ -103,6 +103,21 @@ RCT_EXPORT_METHOD(login:(NSString *)externalId
   [[PushizoRNBridge shared] login:externalId identityHash:identityHash jwt:jwt resolve:resolve reject:reject];
 }
 
+RCT_EXPORT_METHOD(isInitialized:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@([[PushizoRNBridge shared] isInitialized]));
+}
+
+RCT_EXPORT_METHOD(loginWithProfile:(NSString *)externalId
+                  profile:(NSDictionary *)profile
+                  identityHash:(NSString *_Nullable)identityHash
+                  jwt:(NSString *_Nullable)jwt
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] loginWithProfile:externalId profile:profile identityHash:identityHash jwt:jwt resolve:resolve reject:reject];
+}
+
 RCT_EXPORT_METHOD(updateUserJwt:(NSString *)jwt
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
@@ -219,6 +234,33 @@ RCT_EXPORT_METHOD(setPreferences:(NSArray *)preferences
   [[PushizoRNBridge shared] setPreferences:preferences resolve:resolve reject:reject];
 }
 
+RCT_EXPORT_METHOD(setAdsPersonalizationConsent:(BOOL)granted
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] setAdsPersonalizationConsent:granted resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(getConsents:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] getConsents:resolve reject:reject];
+}
+
+// ADM yalnızca Fire OS (Android) içindir; iOS'ta etkisizdir.
+RCT_EXPORT_METHOD(registerAdm:(NSString *)token
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(nil);
+}
+
+#pragma mark - Reklam kimliği
+
+RCT_EXPORT_METHOD(setAdvertisingId:(NSString *_Nullable)advertisingId)
+{
+  [[PushizoRNBridge shared] setAdvertisingId:advertisingId];
+}
+
 #pragma mark - Push aboneliği
 
 RCT_EXPORT_METHOD(getPushSubscriptionState:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
@@ -251,6 +293,11 @@ RCT_EXPORT_METHOD(requestPermission:(RCTPromiseResolveBlock)resolve reject:(RCTP
 RCT_EXPORT_METHOD(clearAll)
 {
   [[PushizoRNBridge shared] clearAll];
+}
+
+RCT_EXPORT_METHOD(setBadgeCount:(double)count)
+{
+  [[PushizoRNBridge shared] setBadgeCount:(NSInteger)count];
 }
 
 RCT_EXPORT_METHOD(removeNotification:(NSString *)identifier
@@ -493,6 +540,11 @@ RCT_EXPORT_METHOD(chatGetVisitorId:(RCTPromiseResolveBlock)resolve reject:(RCTPr
   resolve([[PushizoRNBridge shared] chatVisitorId]);
 }
 
+RCT_EXPORT_METHOD(chatIsListening:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@([[PushizoRNBridge shared] chatIsListening]));
+}
+
 #pragma mark - Live Activities
 
 RCT_EXPORT_METHOD(setupDefaultLiveActivity:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
@@ -526,6 +578,24 @@ RCT_EXPORT_METHOD(requestLocationPermission:(NSString *_Nullable)rationale
                   reject:(RCTPromiseRejectBlock)reject)
 {
   [[PushizoRNBridge shared] requestLocationPermission:rationale resolve:resolve];
+}
+
+RCT_EXPORT_METHOD(locationPermissionGranted:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@([[PushizoRNBridge shared] locationPermissionGranted]));
+}
+
+RCT_EXPORT_METHOD(locationBackgroundPermissionGranted:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@([[PushizoRNBridge shared] locationBackgroundPermissionGranted]));
+}
+
+// iOS "her zaman" izni kendi sistem istemini gösterir; açıklama metni (rationale) kullanılmaz.
+RCT_EXPORT_METHOD(requestBackgroundLocationPermission:(NSString *_Nullable)rationale
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] requestBackgroundLocationPermission:resolve];
 }
 
 RCT_EXPORT_METHOD(setGeofencingEnabled:(BOOL)enabled)

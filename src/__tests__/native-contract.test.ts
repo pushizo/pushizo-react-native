@@ -111,10 +111,9 @@ describe('yerel sözleşme', () => {
     expect(impl).toContain('fun isLocationShared(promise: Promise) = promise.resolve(Pushizo.Location.isShared)');
     // 1) İzin zaten varsa SDK'ya bildirilir ve true döner.
     expect(impl).toMatch(/if \(Pushizo\.Location\.permissionGranted\) \{\s+Pushizo\.Location\.onPermissionResult\(\)\s+promise\.resolve\(true\)/);
-    // 2) Yalnızca manifest'te tanımlı ön plan izinleri istenir; arka plan konumu yok.
+    // 2) Yalnızca manifest'te tanımlı ön plan izinleri istenir (arka plan izni ayrı çağrıdır).
     expect(impl).toContain('context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)');
     expect(impl).toContain('Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION');
-    expect(impl).not.toContain('ACCESS_BACKGROUND_LOCATION');
     expect(impl).toMatch(/if \(permissions\.isEmpty\(\)\) \{\s+HsLog\.w\([^)]*\)\s+promise\.resolve\(false\)/);
     // 3) Activity yoksa köprünün NO_ACTIVITY deseni.
     expect(impl).toMatch(/if \(activity !is PermissionAwareActivity\) \{\s+promise\.reject\("NO_ACTIVITY"/);
@@ -123,12 +122,13 @@ describe('yerel sözleşme', () => {
     for (const name of ['hs_location_rationale_title', 'hs_location_rationale_message', 'hs_location_rationale_continue', 'hs_location_rationale_not_now']) {
       expect(impl).toContain(`R.string.${name}`);
     }
-    expect(impl).toContain("rationale?.takeIf { it.isNotBlank() } ?: activity.getString(R.string.hs_location_rationale_message)");
+    expect(impl).toContain('rationale?.takeIf { it.isNotBlank() } ?: activity.getString(messageRes)');
     expect(impl).toContain('.setOnDismissListener { if (!proceeding) promise.resolve(false) }');
     // 5) Sistem izni SDK istek koduyla; sonuçta onPermissionResult ve güncel izin.
     expect(impl).toContain('activity.requestPermissions(permissions, Pushizo.Location.PERMISSION_REQUEST_CODE, listener)');
     expect(impl).toContain('if (requestCode != Pushizo.Location.PERMISSION_REQUEST_CODE) return@PermissionListener false');
-    expect(impl).toMatch(/Pushizo\.Location\.onPermissionResult\(\)\s+promise\.resolve\(Pushizo\.Location\.permissionGranted\)/);
+    expect(impl).toMatch(/Pushizo\.Location\.onPermissionResult\(\)\s+promise\.resolve\(granted\(\)\)/);
+    expect(impl).toContain(') { Pushizo.Location.permissionGranted }');
 
     const mm = read('ios/PushizoRN.mm');
     expect(mm).toContain('[[PushizoRNBridge shared] setLocationShared:shared];');
@@ -142,12 +142,11 @@ describe('yerel sözleşme', () => {
     expect(swift).toContain('Pushizo.Location.requestPermission(rationale: text) { granted in resolve(granted) }');
   });
 
-  test('Bölge izleme: yerel Location.setGeofencingEnabled/isGeofencingEnabled; köprü arka plan izni istemez', () => {
+  test('Bölge izleme: yerel Location.setGeofencingEnabled/isGeofencingEnabled; izin manifest/Info.plist\'e eklenmez', () => {
     expect(methods).toEqual(expect.arrayContaining(['setGeofencingEnabled', 'isGeofencingEnabled']));
     const impl = read('android/src/main/java/com/pushizo/reactnative/PushizoModuleImpl.kt');
     expect(impl).toContain('fun setGeofencingEnabled(enabled: Boolean) = Pushizo.Location.setGeofencingEnabled(enabled)');
     expect(impl).toContain('fun isGeofencingEnabled(promise: Promise) = promise.resolve(Pushizo.Location.isGeofencingEnabled)');
-    expect(impl).not.toContain('ACCESS_BACKGROUND_LOCATION');
     expect(read('android/src/main/AndroidManifest.xml')).not.toContain('LOCATION');
 
     const mm = read('ios/PushizoRN.mm');
@@ -156,7 +155,84 @@ describe('yerel sözleşme', () => {
     const swift = read('ios/PushizoRNBridge.swift');
     expect(swift).toContain('Pushizo.Location.setGeofencingEnabled(enabled)');
     expect(swift).toContain('resolve(Pushizo.Location.isGeofencingEnabled)');
-    expect(swift).not.toContain('requestAlwaysPermission');
+  });
+
+  test('Konum izin durumu ve arka plan izni: Android yerel özellikler ve köprü akışı, iOS CLLocationManager ve requestAlwaysPermission', () => {
+    expect(methods).toEqual(
+      expect.arrayContaining(['locationPermissionGranted', 'locationBackgroundPermissionGranted', 'requestBackgroundLocationPermission']),
+    );
+    const impl = read('android/src/main/java/com/pushizo/reactnative/PushizoModuleImpl.kt');
+    expect(impl).toContain('fun locationPermissionGranted(promise: Promise) = promise.resolve(Pushizo.Location.permissionGranted)');
+    expect(impl).toContain(
+      'fun locationBackgroundPermissionGranted(promise: Promise) = promise.resolve(Pushizo.Location.backgroundPermissionGranted)',
+    );
+    // Zaten verilmişse true; Android 10 öncesinde normal konum akışı; manifest'te yoksa false.
+    expect(impl).toMatch(/if \(Pushizo\.Location\.backgroundPermissionGranted\) \{\s+Pushizo\.Location\.onPermissionResult\(\)\s+promise\.resolve\(true\)/);
+    expect(impl).toMatch(/if \(Build\.VERSION\.SDK_INT < Build\.VERSION_CODES\.Q\) \{\s+requestLocationPermission\(rationale, promise\)/);
+    expect(impl).toMatch(/if \(!backgroundLocationDeclared\(\)\) \{\s+HsLog\.w\([^)]*\)\s+promise\.resolve\(false\)/);
+    expect(impl).toContain('arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION)');
+    expect(impl).toContain('R.string.hs_geofence_rationale_title');
+    expect(impl).toContain('R.string.hs_geofence_rationale_message');
+    expect(impl).toContain(') { Pushizo.Location.backgroundPermissionGranted }');
+
+    const mm = read('ios/PushizoRN.mm');
+    expect(mm).toContain('resolve(@([[PushizoRNBridge shared] locationPermissionGranted]));');
+    expect(mm).toContain('resolve(@([[PushizoRNBridge shared] locationBackgroundPermissionGranted]));');
+    expect(mm).toContain('[[PushizoRNBridge shared] requestBackgroundLocationPermission:resolve];');
+    const swift = read('ios/PushizoRNBridge.swift');
+    expect(swift).toContain('return status == .authorizedWhenInUse || status == .authorizedAlways');
+    expect(swift).toContain('Self.locationAuthorizationStatus() == .authorizedAlways');
+    expect(swift).toContain('Pushizo.Location.requestAlwaysPermission { granted in resolve(granted) }');
+  });
+
+  test('Profille giriş, rıza, reklam kimliği, rozet, ADM ve sohbet akış durumu yerel SDK çağrılarına bağlı', () => {
+    expect(methods).toEqual(
+      expect.arrayContaining([
+        'isInitialized', 'loginWithProfile', 'setAdsPersonalizationConsent', 'getConsents', 'registerAdm', 'setAdvertisingId',
+        'setBadgeCount', 'chatIsListening',
+      ]),
+    );
+    const impl = read('android/src/main/java/com/pushizo/reactnative/PushizoModuleImpl.kt');
+    expect(impl).toContain('fun isInitialized(promise: Promise) = promise.resolve(Pushizo.isInitialized)');
+    expect(impl).toContain('Pushizo.login(externalId, profile.toUserProfile(), identityHash, jwt)');
+    expect(impl).toContain('Pushizo.User.setAdsPersonalizationConsent(granted, reply(promise) { Arguments.makeNativeMap(it.toMap()) })');
+    expect(impl).toContain('Pushizo.User.getConsents(reply(promise) { consents -> Arguments.makeNativeArray(consents.map { it.toMap() }) })');
+    expect(impl).toContain('Pushizo.User.registerAdm(token)');
+    expect(impl).toContain('fun setAdvertisingId(id: String?) = Pushizo.Ads.setAdvertisingId(id)');
+    // Android'de rozet sayacı yok: çağrı etkisiz, istisna yok.
+    expect(impl).toContain('fun setBadgeCount(count: Double) = Unit');
+    expect(impl).toContain('fun chatIsListening(promise: Promise) = promise.resolve(Pushizo.Chat.isListening)');
+    const mappers = read('android/src/main/java/com/pushizo/reactnative/PushizoMappers.kt');
+    expect(mappers).toContain('internal fun ReadableMap.toUserProfile(): HsUserProfile = HsUserProfile(');
+    expect(mappers).toContain('"consents" to consents.map { it.toMap() }');
+    expect(mappers).toContain('mapOf("purpose" to purpose, "granted" to granted, "source" to source, "updatedAt" to updatedAt)');
+
+    const mm = read('ios/PushizoRN.mm');
+    expect(mm).toContain('resolve(@([[PushizoRNBridge shared] isInitialized]));');
+    expect(mm).toContain(
+      '[[PushizoRNBridge shared] loginWithProfile:externalId profile:profile identityHash:identityHash jwt:jwt resolve:resolve reject:reject]',
+    );
+    expect(mm).toContain('[[PushizoRNBridge shared] setAdsPersonalizationConsent:granted resolve:resolve reject:reject]');
+    expect(mm).toContain('[[PushizoRNBridge shared] getConsents:resolve reject:reject]');
+    expect(mm).toContain('[[PushizoRNBridge shared] setAdvertisingId:advertisingId]');
+    expect(mm).toContain('[[PushizoRNBridge shared] setBadgeCount:(NSInteger)count]');
+    expect(mm).toContain('resolve(@([[PushizoRNBridge shared] chatIsListening]));');
+    // ADM yalnızca Android: iOS etkisiz biçimde çözülür.
+    expect(mm).toMatch(/RCT_EXPORT_METHOD\(registerAdm:[^{]*\{\s+resolve\(nil\);/);
+    const swift = read('ios/PushizoRNBridge.swift');
+    // iOS'ta profil doğrulaması girişten önce yapılır (Android HsUserProfile.validate ile aynı sıra).
+    const login = swift.slice(swift.indexOf('func loginWithProfile'), swift.indexOf('func updateUserJwt'));
+    expect(login.indexOf('HSContacts.normalizeEmail(email) == nil')).toBeGreaterThan(-1);
+    expect(login.indexOf('HSContacts.normalizePhone(sms) == nil')).toBeLessThan(login.indexOf('Pushizo.login(externalId'));
+    expect(login.indexOf('Pushizo.login(externalId')).toBeLessThan(login.indexOf('Pushizo.User.addEmail(email)'));
+    for (const call of ['Pushizo.User.addSms(sms)', 'Pushizo.User.addTags(tags)', 'Pushizo.User.addAliases(aliases)']) expect(login).toContain(call);
+    expect(swift).toContain('try await Self.map(Pushizo.User.setAdsPersonalizationConsent(granted))');
+    expect(swift).toContain('try await Pushizo.User.getConsents().map { Self.map($0) }');
+    expect(swift).toContain('@objc public func setAdvertisingId(_ id: String?) { Pushizo.Ads.setAdvertisingId(id) }');
+    expect(swift).toContain('Pushizo.Notifications.setBadgeCount(count)');
+    expect(swift).toContain('Pushizo.Notifications.clearBadge()');
+    expect(swift).toContain('@objc public func chatIsListening() -> Bool { Pushizo.Chat.isListening }');
+    expect(swift).toContain('"consents": r.consents.map { map($0) }');
   });
 
   test('Android teslimat güçlendirme: yerel Pushizo.Delivery çağrılarına bağlı; iOS zararsız yanıt verir', () => {

@@ -13,6 +13,7 @@ export {
   LogLevel,
   type InitializeOptions,
   type LoginOptions,
+  type UserProfile,
   type LiveActivityValue,
   type NotificationData,
   type NotificationClickEvent,
@@ -47,6 +48,7 @@ export {
   type PreferenceChannel,
   type PreferenceCategory,
   type PreferenceInput,
+  type UserConsent,
   type UserPreference,
   type UserPreferences,
 } from './types';

@@ -63,6 +63,14 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
         promise.resolve(null)
     }
 
+    fun isInitialized(promise: Promise) = promise.resolve(Pushizo.isInitialized)
+
+    /** Profil alanları yerel SDK'da girişten önce doğrulanır (geçersiz e-posta/telefon `INVALID_ARGUMENT`). */
+    fun loginWithProfile(externalId: String, profile: ReadableMap, identityHash: String?, jwt: String?, promise: Promise) = guard(promise) {
+        Pushizo.login(externalId, profile.toUserProfile(), identityHash, jwt)
+        promise.resolve(null)
+    }
+
     fun updateUserJwt(jwt: String, promise: Promise) = guard(promise) {
         Pushizo.updateUserJwt(jwt)
         promise.resolve(null)
@@ -137,6 +145,23 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
     fun setPreferences(preferences: ReadableArray, promise: Promise) =
         Pushizo.User.setPreferences(preferences.toPreferenceInputs(), reply(promise) { Arguments.makeNativeMap(it.toMap()) })
 
+    /** Reklam kişiselleştirme rızası (ADR-0037); sonuç güncel tercihlerdir. */
+    fun setAdsPersonalizationConsent(granted: Boolean, promise: Promise) =
+        Pushizo.User.setAdsPersonalizationConsent(granted, reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+
+    fun getConsents(promise: Promise) =
+        Pushizo.User.getConsents(reply(promise) { consents -> Arguments.makeNativeArray(consents.map { it.toMap() }) })
+
+    /** Fire OS ADM kayıt kimliği; geçersiz kimlik `INVALID_ARGUMENT`. */
+    fun registerAdm(token: String, promise: Promise) = guard(promise) {
+        Pushizo.User.registerAdm(token)
+        promise.resolve(null)
+    }
+
+    // --- Reklam kimliği (ADR-0037) ---
+
+    fun setAdvertisingId(id: String?) = Pushizo.Ads.setAdvertisingId(id)
+
     // --- Push aboneliği ---
 
     fun getPushSubscriptionState(promise: Promise) =
@@ -191,6 +216,10 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
         Pushizo.Notifications.removeGroupedNotifications(group)
         promise.resolve(null)
     }
+
+    /** Android'de başlatıcı rozeti görünen bildirimlerden hesaplanır; ayrı bir sayaç yoktur, çağrı etkisizdir. */
+    @Suppress("UNUSED_PARAMETER")
+    fun setBadgeCount(count: Double) = Unit
 
     fun setForegroundHandlerEnabled(enabled: Boolean) {
         PushizoBridge.foregroundHandlerEnabled = enabled
@@ -287,6 +316,60 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
             promise.resolve(false)
             return
         }
+        requestWithRationale(
+            R.string.hs_location_rationale_title,
+            R.string.hs_location_rationale_message,
+            rationale,
+            permissions,
+            promise,
+        ) { Pushizo.Location.permissionGranted }
+    }
+
+    fun locationPermissionGranted(promise: Promise) = promise.resolve(Pushizo.Location.permissionGranted)
+
+    fun locationBackgroundPermissionGranted(promise: Promise) = promise.resolve(Pushizo.Location.backgroundPermissionGranted)
+
+    /**
+     * Arka plan konum izni (bölge izleme). Yerel `Location.requestBackgroundPermission(activity)` sonucu bildirmediğinden
+     * akış burada yürütülür: zaten verilmişse `true`; Android 10 öncesinde normal konum izni akışı; manifest'te
+     * `ACCESS_BACKGROUND_LOCATION` yoksa `false`; aksi hâlde açıklama diyaloğu ve sistem izni (Android 11+ Ayarlar ekranı).
+     */
+    fun requestBackgroundLocationPermission(rationale: String?, promise: Promise) {
+        if (Pushizo.Location.backgroundPermissionGranted) {
+            Pushizo.Location.onPermissionResult()
+            promise.resolve(true)
+            return
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            requestLocationPermission(rationale, promise)
+            return
+        }
+        if (!backgroundLocationDeclared()) {
+            HsLog.w("arka plan konum izni istenemedi: uygulama manifest'inde ACCESS_BACKGROUND_LOCATION yok")
+            promise.resolve(false)
+            return
+        }
+        requestWithRationale(
+            R.string.hs_geofence_rationale_title,
+            R.string.hs_geofence_rationale_message,
+            rationale,
+            arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
+            promise,
+        ) { Pushizo.Location.backgroundPermissionGranted }
+    }
+
+    /**
+     * Açıklama diyaloğu, ardından [PermissionAwareActivity] ile sistem izni; sonuçta SDK'ya
+     * [Pushizo.Location.onPermissionResult] bildirilir ve Promise [granted] değeriyle bir kez çözülür.
+     */
+    private fun requestWithRationale(
+        titleRes: Int,
+        messageRes: Int,
+        rationale: String?,
+        permissions: Array<String>,
+        promise: Promise,
+        granted: () -> Boolean,
+    ) {
         val activity = context.currentActivity
         if (activity !is PermissionAwareActivity) {
             promise.reject("NO_ACTIVITY", "İzin istemek için ön planda bir ReactActivity gerekli.")
@@ -294,9 +377,9 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
         }
         val listener = PermissionListener { requestCode, _, _ ->
             if (requestCode != Pushizo.Location.PERMISSION_REQUEST_CODE) return@PermissionListener false
-            // İzin verildiyse ve paylaşım açıksa yerel SDK konumu hemen gönderir.
+            // İzin verildiyse ve paylaşım açıksa yerel SDK konumu hemen gönderir, bölge izlemeyi yeniler.
             Pushizo.Location.onPermissionResult()
-            promise.resolve(Pushizo.Location.permissionGranted)
+            promise.resolve(granted())
             true
         }
         UiThreadUtil.runOnUiThread {
@@ -307,8 +390,8 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
             // "Devam" dışındaki her kapanış (Şimdi değil, geri tuşu, dışına dokunma) reddedilmiş sayılır; Promise bir kez çözülür.
             var proceeding = false
             AlertDialog.Builder(activity)
-                .setTitle(R.string.hs_location_rationale_title)
-                .setMessage(rationale?.takeIf { it.isNotBlank() } ?: activity.getString(R.string.hs_location_rationale_message))
+                .setTitle(titleRes)
+                .setMessage(rationale?.takeIf { it.isNotBlank() } ?: activity.getString(messageRes))
                 .setPositiveButton(R.string.hs_location_rationale_continue) { _, _ ->
                     proceeding = true
                     activity.requestPermissions(permissions, Pushizo.Location.PERMISSION_REQUEST_CODE, listener)
@@ -333,6 +416,14 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
     } catch (e: PackageManager.NameNotFoundException) {
         HsLog.w("uygulama paket bilgisi okunamadı", e)
         emptyArray()
+    }
+
+    private fun backgroundLocationDeclared(): Boolean = try {
+        val info = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+        Manifest.permission.ACCESS_BACKGROUND_LOCATION in info.requestedPermissions.orEmpty()
+    } catch (e: PackageManager.NameNotFoundException) {
+        HsLog.w("uygulama paket bilgisi okunamadı", e)
+        false
     }
 
     // --- Android teslimat güçlendirme (ADR-0092): teşhis, ayar ekranı adayları ve diyalog yerel SDK'dadır ---
@@ -465,6 +556,8 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
     }
 
     fun chatGetVisitorId(promise: Promise) = promise.resolve(Pushizo.Chat.visitorId)
+
+    fun chatIsListening(promise: Promise) = promise.resolve(Pushizo.Chat.isListening)
 
     // --- Hata ayıklama ---
 

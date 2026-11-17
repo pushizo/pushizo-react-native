@@ -23,6 +23,7 @@ import type {
   PreferenceCategory,
   PushSubscriptionState,
   UserPreference,
+  UserConsent,
   UserPreferences,
 } from './types';
 
@@ -210,7 +211,23 @@ export function toUserPreferences(raw: RawMap): UserPreferences {
   const m = raw ?? {};
   const list = <T>(value: unknown, map: (r: RawMap) => T | null): T[] =>
     Array.isArray(value) ? value.filter(isMap).map(map).filter((v): v is T => v !== null) : [];
-  return { preferences: list(m.preferences, toUserPreference), categories: list(m.categories, toPreferenceCategory) };
+  return {
+    preferences: list(m.preferences, toUserPreference),
+    categories: list(m.categories, toPreferenceCategory),
+    consents: list(m.consents, toUserConsent),
+  };
+}
+
+/** Amaçsız rıza kaydı için `null` (yerel SDK ayrıştırıcısıyla aynı: geçersiz kayıt atlanır). */
+export function toUserConsent(raw: RawMap): UserConsent | null {
+  const m = raw ?? {};
+  const purpose = str(m.purpose);
+  if (!purpose) return null;
+  return { purpose, granted: m.granted === true, source: str(m.source), updatedAt: num(m.updatedAt) };
+}
+
+export function toUserConsents(raw: unknown): UserConsent[] {
+  return Array.isArray(raw) ? raw.filter(isMap).map(toUserConsent).filter((v): v is UserConsent => v !== null) : [];
 }
 
 /** `featureFlagsGetValue` zarfındaki (`{ value }`) değer; değer yoksa veya `null` ise `undefined`. */

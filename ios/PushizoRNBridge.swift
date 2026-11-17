@@ -4,6 +4,7 @@ import Pushizo
 #if canImport(PushizoCore)
 import PushizoCore
 #endif
+import CoreLocation
 import UIKit
 import UserNotifications
 
@@ -214,6 +215,27 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
         resolve(nil)
     }
 
+    @objc public func isInitialized() -> Bool { Pushizo.isInitialized }
+
+    /// Yerel iOS SDK'da profil aşırı yüklemesi yoktur; Android `login(externalId, HsUserProfile)` davranışı burada uygulanır:
+    /// e-posta/telefon girişten ÖNCE doğrulanır (yarım kimlik değişimi olmaz), sonra giriş ve profil alanları yazılır.
+    @objc public func loginWithProfile(_ externalId: String, profile: [String: Any], identityHash: String?, jwt: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        guard Pushizo.isInitialized else { reject("NOT_READY", "Pushizo.initialize önce çağrılmalı", nil); return }
+        let email = profile["email"] as? String
+        let sms = profile["sms"] as? String
+        if let email = email, HSContacts.normalizeEmail(email) == nil { reject("INVALID_ARGUMENT", "Geçersiz e-posta adresi", nil); return }
+        if let sms = sms, HSContacts.normalizePhone(sms) == nil { reject("INVALID_ARGUMENT", "Geçersiz telefon numarası", nil); return }
+        if let message = Pushizo.loginProofError(identityHash: identityHash, jwt: jwt) { reject("NOT_READY", message, nil); return }
+        Pushizo.login(externalId, identityHash: identityHash, jwt: jwt)
+        if let email = email { Pushizo.User.addEmail(email) }
+        if let sms = sms { Pushizo.User.addSms(sms) }
+        let tags = Self.stringMap(profile["tags"] as? [String: Any] ?? [:])
+        if !tags.isEmpty { Pushizo.User.addTags(tags) }
+        let aliases = Self.stringMap(profile["aliases"] as? [String: Any] ?? [:])
+        if !aliases.isEmpty { Pushizo.User.addAliases(aliases) }
+        resolve(nil)
+    }
+
     @objc public func updateUserJwt(_ jwt: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
         do {
             try Pushizo.updateUserJwt(jwt)
@@ -299,6 +321,20 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
         inbox(resolve, reject) { try await Self.map(Pushizo.User.setPreferences(inputs)) }
     }
 
+    /// Reklam kişiselleştirme rızası (ADR-0037); sonuç güncel tercihlerdir.
+    @objc public func setAdsPersonalizationConsent(_ granted: Bool, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        inbox(resolve, reject) { try await Self.map(Pushizo.User.setAdsPersonalizationConsent(granted)) }
+    }
+
+    @objc public func getConsents(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        inbox(resolve, reject) { try await Pushizo.User.getConsents().map { Self.map($0) } }
+    }
+
+    // MARK: - Reklam kimliği (ADR-0037)
+
+    /// IDFA; `nil` veya sıfır kimlik sunucudaki kaydı siler. ATT izni ve kimliğin alınması uygulamanındır.
+    @objc public func setAdvertisingId(_ id: String?) { Pushizo.Ads.setAdvertisingId(id) }
+
     // MARK: - Push aboneliği
 
     @objc public func getPushSubscriptionState(_ resolve: @escaping (Any?) -> Void) {
@@ -339,6 +375,11 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
         guard !group.trimmingCharacters(in: .whitespaces).isEmpty else { reject("INVALID_ARGUMENT", "group gerekli", nil); return }
         Pushizo.Notifications.removeGroupedNotifications(group)
         resolve(nil)
+    }
+
+    /// Uygulama rozeti ve NSE ile paylaşılan sayaç; 0 rozeti sıfırlar.
+    @objc public func setBadgeCount(_ count: Int) {
+        if count <= 0 { Pushizo.Notifications.clearBadge() } else { Pushizo.Notifications.setBadgeCount(count) }
     }
 
     @objc public func setForegroundHandlerEnabled(_ enabled: Bool) { onMain { self.foregroundHandlerEnabled = enabled } }
@@ -479,6 +520,8 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
 
     @objc public func chatVisitorId() -> String? { Pushizo.Chat.visitorId }
 
+    @objc public func chatIsListening() -> Bool { Pushizo.Chat.isListening }
+
     // MARK: - Bildirim kutusu
 
     @objc public func inboxList(_ limit: Double, cursor: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
@@ -586,6 +629,25 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
     @objc public func requestLocationPermission(_ rationale: String?, resolve: @escaping (Any?) -> Void) {
         let text = rationale.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
         Pushizo.Location.requestPermission(rationale: text) { granted in resolve(granted) }
+    }
+
+    /// Yerel iOS SDK izin durumunu sunmaz; `CLLocationManager` yetki durumundan okunur ("kullanırken" veya "her zaman").
+    @objc public func locationPermissionGranted() -> Bool {
+        let status = Self.locationAuthorizationStatus()
+        return status == .authorizedWhenInUse || status == .authorizedAlways
+    }
+
+    /// "Her zaman" konum izni verilmiş mi (bölge izleme için gerekir).
+    @objc public func locationBackgroundPermissionGranted() -> Bool { Self.locationAuthorizationStatus() == .authorizedAlways }
+
+    /// "Her zaman" konum izni; önce "kullanırken" izni verilmiş olmalıdır. Sonuç yerel SDK'dan ana iş parçacığında gelir.
+    @objc public func requestBackgroundLocationPermission(_ resolve: @escaping (Any?) -> Void) {
+        onMain { Pushizo.Location.requestAlwaysPermission { granted in resolve(granted) } }
+    }
+
+    private static func locationAuthorizationStatus() -> CLAuthorizationStatus {
+        if #available(iOS 14.0, *) { return CLLocationManager().authorizationStatus }
+        return CLLocationManager.authorizationStatus()
     }
 
     /// Arka plan bölge izleme (ADR-0065; varsayılan kapalı). Köprü "her zaman" konum iznini istemez, Info.plist'e anahtar eklemez.
@@ -725,7 +787,11 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
     }
 
     private static func map(_ r: HSPreferencesResult) -> [String: Any] {
-        ["preferences": r.preferences.map { map($0) }, "categories": r.categories.map { map($0) }]
+        ["preferences": r.preferences.map { map($0) }, "categories": r.categories.map { map($0) }, "consents": r.consents.map { map($0) }]
+    }
+
+    private static func map(_ c: HSUserConsent) -> [String: Any] {
+        ["purpose": c.purpose, "granted": c.granted, "source": c.source ?? NSNull(), "updatedAt": millis(c.updatedAt)]
     }
 
     // MARK: - In-app mesaj modeli (TS `InAppMessage`; alan adları Android köprüsüyle aynı)

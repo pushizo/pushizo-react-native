@@ -15,6 +15,11 @@ export interface Spec extends TurboModule {
   initialize(appId: string, options: Object): Promise<void>;
   setConsentGiven(given: boolean): void;
   login(externalId: string, identityHash: string | null, jwt: string | null): Promise<void>;
+  /** SDK başlatıldı mı (yerel `Pushizo.isInitialized`). */
+  isInitialized(): Promise<boolean>;
+  /** profile: { email, sms, tags, aliases } (hepsi isteğe bağlı); geçersiz e-posta/telefon girişten önce `INVALID_ARGUMENT`. */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  loginWithProfile(externalId: string, profile: Object, identityHash: string | null, jwt: string | null): Promise<void>;
   updateUserJwt(jwt: string): Promise<void>;
   logout(): void;
 
@@ -44,6 +49,18 @@ export interface Spec extends TurboModule {
   /** preferences: [{ category, channel (null = tüm kanallar), optedIn }]; sonuç `getPreferences` ile aynı biçimdedir. */
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
   setPreferences(preferences: Array<Object>): Promise<Object>;
+  /** Reklam kişiselleştirme rızası (ADR-0037); sonuç `getPreferences` ile aynı biçimdedir. */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  setAdsPersonalizationConsent(granted: boolean): Promise<Object>;
+  /** Sonuç: [{ purpose, granted, source, updatedAt }] */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  getConsents(): Promise<Array<Object>>;
+  /** Fire OS ADM kayıt kimliği (yalnızca Android; iOS'ta etkisiz). */
+  registerAdm(token: string): Promise<void>;
+
+  // --- Reklam kimliği (ADR-0037) ---
+  /** GAID / IDFA; `null` veya sıfır kimlik sunucudaki kaydı siler. */
+  setAdvertisingId(id: string | null): void;
 
   // --- Push aboneliği ---
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
@@ -59,6 +76,8 @@ export interface Spec extends TurboModule {
   removeNotification(id: string): Promise<void>;
   /** Android `android_group`, iOS `thread-id` grubundaki bildirimleri kaldırır. */
   removeGroupedNotifications(group: string): Promise<void>;
+  /** Uygulama rozeti (yalnızca iOS; Android'de rozet görünen bildirimlerden hesaplandığından etkisiz). */
+  setBadgeCount(count: number): void;
   setForegroundHandlerEnabled(enabled: boolean): void;
   /** Ön plan olayı için bildirimi gösterir (bir kez). */
   displayNotification(notificationId: string): void;
@@ -124,6 +143,8 @@ export interface Spec extends TurboModule {
   chatStopListening(): void;
   chatAttachmentUrl(attachmentId: string, download: boolean): Promise<string>;
   chatGetVisitorId(): Promise<string | null>;
+  /** Gerçek zamanlı akış açık mı. */
+  chatIsListening(): Promise<boolean>;
 
   // --- Live Activities (yalnızca iOS 16.1+; Android `PLATFORM_NOT_SUPPORTED` ile reddeder) ---
   /** Genel `PushizoDefaultLiveActivityAttributes` türünü izlemeye alır (push-to-start ve güncelleme belirteçleri). */
@@ -139,6 +160,12 @@ export interface Spec extends TurboModule {
   isLocationShared(): Promise<boolean>;
   /** Açıklama diyaloğu (null → SDK'nın yerelleştirilmiş metni) ve "kullanırken" konum izni; sonuç: izin var/verildi mi. */
   requestLocationPermission(rationale: string | null): Promise<boolean>;
+  /** Yaklaşık veya hassas ("kullanırken" ya da "her zaman") konum izni verilmiş mi. */
+  locationPermissionGranted(): Promise<boolean>;
+  /** Arka plan ("her zaman") konum izni verilmiş mi. */
+  locationBackgroundPermissionGranted(): Promise<boolean>;
+  /** Arka plan konum izni: Android `ACCESS_BACKGROUND_LOCATION` (açıklama diyaloğuyla), iOS "her zaman" (rationale yok sayılır). */
+  requestBackgroundLocationPermission(rationale: string | null): Promise<boolean>;
 
   // --- Arka plan bölge izleme (ADR-0065; varsayılan kapalı, köprü izin istemez) ---
   setGeofencingEnabled(enabled: boolean): void;

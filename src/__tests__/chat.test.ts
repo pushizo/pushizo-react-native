@@ -50,6 +50,7 @@ function load() {
     chatStopListening: jest.fn(),
     chatAttachmentUrl: resolved('https://api.pushizo.com/sdk/v1/apps/app_1/chat/attachments/att_1?visitor_id=v&token=t'),
     chatGetVisitorId: resolved('v'.repeat(32)),
+    chatIsListening: resolved(true),
     addListener: jest.fn(),
     removeListeners: jest.fn(),
   };
@@ -137,6 +138,13 @@ describe('Pushizo.Chat (React Native)', () => {
     expect(native.chatStopListening).toHaveBeenCalled();
     expect(await Pushizo.Chat.attachmentUrl('att_1')).toContain('/chat/attachments/att_1');
     expect(native.chatAttachmentUrl).toHaveBeenCalledWith('att_1', false);
+  });
+
+  test('isListening: yerel akış durumu mantıksal değere çevrilir', async () => {
+    const { Pushizo, native } = load();
+    await expect(Pushizo.Chat.isListening()).resolves.toBe(true);
+    native.chatIsListening.mockImplementationOnce(() => Promise.resolve(null));
+    await expect(Pushizo.Chat.isListening()).resolves.toBe(false);
   });
 
   test('olaylar türüne göre dağıtılır; yerel abonelik ilk dinleyicide açılır, sonuncusunda kapanır', () => {

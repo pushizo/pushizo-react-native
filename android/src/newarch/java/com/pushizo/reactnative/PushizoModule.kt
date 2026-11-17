@@ -340,6 +340,50 @@ class PushizoModule(reactContext: ReactApplicationContext) : NativePushizoSpec(r
         impl.placementsReportDismiss(messageId)
     }
 
+    override fun isInitialized(promise: Promise) {
+        impl.isInitialized(promise)
+    }
+
+    override fun loginWithProfile(externalId: String, profile: ReadableMap, identityHash: String?, jwt: String?, promise: Promise) {
+        impl.loginWithProfile(externalId, profile, identityHash, jwt, promise)
+    }
+
+    override fun setAdsPersonalizationConsent(granted: Boolean, promise: Promise) {
+        impl.setAdsPersonalizationConsent(granted, promise)
+    }
+
+    override fun getConsents(promise: Promise) {
+        impl.getConsents(promise)
+    }
+
+    override fun registerAdm(token: String, promise: Promise) {
+        impl.registerAdm(token, promise)
+    }
+
+    override fun setAdvertisingId(id: String?) {
+        impl.setAdvertisingId(id)
+    }
+
+    override fun setBadgeCount(count: Double) {
+        impl.setBadgeCount(count)
+    }
+
+    override fun chatIsListening(promise: Promise) {
+        impl.chatIsListening(promise)
+    }
+
+    override fun locationPermissionGranted(promise: Promise) {
+        impl.locationPermissionGranted(promise)
+    }
+
+    override fun locationBackgroundPermissionGranted(promise: Promise) {
+        impl.locationBackgroundPermissionGranted(promise)
+    }
+
+    override fun requestBackgroundLocationPermission(rationale: String?, promise: Promise) {
+        impl.requestBackgroundLocationPermission(rationale, promise)
+    }
+
     override fun setLogLevel(level: String) {
         impl.setLogLevel(level)
     }

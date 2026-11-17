@@ -25,6 +25,11 @@ const PREFERENCES_RAW = {
     { key: 'news', name: { en: 'News' }, description: {}, channels: null, defaultOptedIn: true },
     { name: { en: 'Anahtarsız' } },
   ],
+  consents: [
+    { purpose: 'ads_personalization', granted: true, source: 'sdk', updatedAt: 1700000002000 },
+    // Amaçsız kayıt atlanır.
+    { granted: true },
+  ],
 };
 
 /** Yerel köprünün yerleşim mesajı (Android `HsInAppMessage.toMap()` / iOS `map(HSInAppMessage)` biçimi). */
@@ -74,6 +79,8 @@ function createNative(): Record<string, jest.Mock> {
     initialize: resolved(),
     setConsentGiven: jest.fn(),
     login: resolved(),
+    isInitialized: resolved(true),
+    loginWithProfile: resolved(),
     updateUserJwt: resolved(),
     logout: jest.fn(),
     addTags: resolved(),
@@ -92,6 +99,10 @@ function createNative(): Record<string, jest.Mock> {
     getSmsNumbers: resolved(['+905321234567']),
     getPreferences: resolved(PREFERENCES_RAW),
     setPreferences: resolved(PREFERENCES_RAW),
+    setAdsPersonalizationConsent: resolved(PREFERENCES_RAW),
+    getConsents: resolved([{ purpose: 'ads_personalization', granted: false, source: null, updatedAt: null }, { granted: true }, 'bozuk']),
+    registerAdm: resolved(),
+    setAdvertisingId: jest.fn(),
     getPushSubscriptionState: resolved({ id: 'sub_1', token: 'tok', optedIn: true, permission: true }),
     optIn: jest.fn(),
     optOut: jest.fn(),
@@ -100,6 +111,7 @@ function createNative(): Record<string, jest.Mock> {
     clearAll: jest.fn(),
     removeNotification: resolved(),
     removeGroupedNotifications: resolved(),
+    setBadgeCount: jest.fn(),
     setForegroundHandlerEnabled: jest.fn(),
     displayNotification: jest.fn(),
     preventDefault: jest.fn(),
@@ -136,6 +148,9 @@ function createNative(): Record<string, jest.Mock> {
     setLocationShared: jest.fn(),
     isLocationShared: resolved(true),
     requestLocationPermission: resolved(true),
+    locationPermissionGranted: resolved(true),
+    locationBackgroundPermissionGranted: resolved(false),
+    requestBackgroundLocationPermission: resolved(true),
     setGeofencingEnabled: jest.fn(),
     isGeofencingEnabled: resolved(false),
     deliveryStatus: resolved({
@@ -601,15 +616,115 @@ describe('Pushizo (React Native)', () => {
         { key: 'promo', name: { tr: 'Kampanyalar', en: 'Promotions' }, description: { tr: 'İndirimler' }, channels: ['email', 'android_push'], defaultOptedIn: false },
         { key: 'news', name: { en: 'News' }, description: {}, channels: null, defaultOptedIn: true },
       ],
+      consents: [{ purpose: 'ads_personalization', granted: true, source: 'sdk', updatedAt: 1700000002000 }],
     });
+  });
+
+  test('User.setAdsPersonalizationConsent / getConsents: yerel modüle iletilir, sonuç tipli modele eşlenir', async () => {
+    const { Pushizo, env } = load();
+    const result = await Pushizo.User.setAdsPersonalizationConsent(true);
+    expect(env.native.setAdsPersonalizationConsent).toHaveBeenCalledWith(true);
+    expect(result.consents).toEqual([{ purpose: 'ads_personalization', granted: true, source: 'sdk', updatedAt: 1700000002000 }]);
+    expect(result.preferences).toHaveLength(2);
+    await Pushizo.User.setAdsPersonalizationConsent(false);
+    expect(env.native.setAdsPersonalizationConsent).toHaveBeenLastCalledWith(false);
+    await expect(Pushizo.User.setAdsPersonalizationConsent('evet' as never)).rejects.toThrow('granted');
+    expect(env.native.setAdsPersonalizationConsent).toHaveBeenCalledTimes(2);
+
+    await expect(Pushizo.User.getConsents()).resolves.toEqual([
+      { purpose: 'ads_personalization', granted: false, source: null, updatedAt: null },
+    ]);
+    env.native.getConsents.mockImplementationOnce(() => Promise.resolve(null));
+    await expect(Pushizo.User.getConsents()).resolves.toEqual([]);
+    env.native.getConsents.mockImplementationOnce(() =>
+      Promise.reject(Object.assign(new Error('Abonelik henüz kaydedilmedi'), { code: 'NOT_READY' })),
+    );
+    await expect(Pushizo.User.getConsents()).rejects.toMatchObject({ code: 'NOT_READY' });
+  });
+
+  test('login: profil verilirse loginWithProfile çağrılır; tip hatası yerel modüle gitmez', async () => {
+    const { Pushizo, env } = load();
+    await Pushizo.login('user_42', {
+      jwt: 'j.w.t',
+      profile: { email: 'ali@ornek.com', sms: '+905321234567', tags: { plan: 'pro' }, aliases: { crm_id: '7' } },
+    });
+    expect(env.native.loginWithProfile).toHaveBeenCalledWith(
+      'user_42',
+      { email: 'ali@ornek.com', sms: '+905321234567', tags: { plan: 'pro' }, aliases: { crm_id: '7' } },
+      null,
+      'j.w.t',
+    );
+    expect(env.native.login).not.toHaveBeenCalled();
+    // Yalnızca verilen alanlar iletilir.
+    await Pushizo.login('user_42', { identityHash: 'h', profile: { email: 'a@b.co' } });
+    expect(env.native.loginWithProfile).toHaveBeenLastCalledWith('user_42', { email: 'a@b.co' }, 'h', null);
+    // Profilsiz giriş eski yerel metodu kullanır.
+    await Pushizo.login('user_42', 'h');
+    expect(env.native.login).toHaveBeenCalledWith('user_42', 'h', null);
+
+    expect(() => Pushizo.login('user_42', { profile: 'x' as never })).toThrow('profile bir nesne');
+    expect(() => Pushizo.login('user_42', { profile: { email: ' ' } })).toThrow('profile.email');
+    expect(() => Pushizo.login('user_42', { profile: { sms: 5 as never } })).toThrow('profile.sms');
+    expect(() => Pushizo.login('user_42', { profile: { tags: { plan: 1 as never } } })).toThrow('profile.tags.plan');
+    expect(() => Pushizo.login('user_42', { profile: { aliases: [] as never } })).toThrow('profile.aliases');
+    expect(env.native.loginWithProfile).toHaveBeenCalledTimes(2);
+  });
+
+  test('isInitialized, User.registerAdm, Ads.setAdvertisingId: yerel modüle iletilir', async () => {
+    const { Pushizo, env } = load();
+    await expect(Pushizo.isInitialized()).resolves.toBe(true);
+    env.native.isInitialized.mockImplementationOnce(() => Promise.resolve(null));
+    await expect(Pushizo.isInitialized()).resolves.toBe(false);
+
+    await Pushizo.User.registerAdm('amzn1.adm-registration.v3.X');
+    expect(env.native.registerAdm).toHaveBeenCalledWith('amzn1.adm-registration.v3.X');
+    expect(() => Pushizo.User.registerAdm(' ')).toThrow('token');
+
+    Pushizo.Ads.setAdvertisingId('38400000-8cf0-11bd-b23e-10b96e40000d');
+    expect(env.native.setAdvertisingId).toHaveBeenLastCalledWith('38400000-8cf0-11bd-b23e-10b96e40000d');
+    Pushizo.Ads.setAdvertisingId(null);
+    expect(env.native.setAdvertisingId).toHaveBeenLastCalledWith(null);
+    Pushizo.Ads.setAdvertisingId('  ');
+    expect(env.native.setAdvertisingId).toHaveBeenLastCalledWith(null);
+    expect(() => Pushizo.Ads.setAdvertisingId(7 as never)).toThrow('id');
+    expect(env.native.setAdvertisingId).toHaveBeenCalledTimes(3);
+  });
+
+  test('Notifications.setBadgeCount / clearBadge: negatif olmayan tam sayı yerel modüle iletilir', () => {
+    const { Pushizo, env } = load();
+    Pushizo.Notifications.setBadgeCount(3);
+    expect(env.native.setBadgeCount).toHaveBeenLastCalledWith(3);
+    Pushizo.Notifications.clearBadge();
+    expect(env.native.setBadgeCount).toHaveBeenLastCalledWith(0);
+    expect(() => Pushizo.Notifications.setBadgeCount(-1)).toThrow('count');
+    expect(() => Pushizo.Notifications.setBadgeCount(1.5)).toThrow('count');
+    expect(() => Pushizo.Notifications.setBadgeCount('2' as never)).toThrow('count');
+    expect(env.native.setBadgeCount).toHaveBeenCalledTimes(2);
+  });
+
+  test('Location: izin durumu ve arka plan izni isteği yerel modüle iletilir', async () => {
+    const { Pushizo, env } = load();
+    await expect(Pushizo.Location.permissionGranted()).resolves.toBe(true);
+    await expect(Pushizo.Location.backgroundPermissionGranted()).resolves.toBe(false);
+    await expect(Pushizo.Location.requestBackgroundPermission('Mağazaya yaklaşınca haber verelim')).resolves.toBe(true);
+    expect(env.native.requestBackgroundLocationPermission).toHaveBeenLastCalledWith('Mağazaya yaklaşınca haber verelim');
+    await Pushizo.Location.requestBackgroundPermission('  ');
+    expect(env.native.requestBackgroundLocationPermission).toHaveBeenLastCalledWith(null);
+    // iOS adı aynı izne gider.
+    await expect(Pushizo.Location.requestAlwaysPermission()).resolves.toBe(true);
+    expect(env.native.requestBackgroundLocationPermission).toHaveBeenLastCalledWith(null);
+    await expect(Pushizo.Location.requestBackgroundPermission(5 as never)).rejects.toThrow('rationale');
+    expect(env.native.requestBackgroundLocationPermission).toHaveBeenCalledTimes(3);
+    env.native.requestBackgroundLocationPermission.mockImplementationOnce(() => Promise.resolve(undefined));
+    await expect(Pushizo.Location.requestBackgroundPermission()).resolves.toBe(false);
   });
 
   test('User.getPreferences: boş/eksik yerel sonuç boş listelere düşer; NOT_READY iletilir', async () => {
     const { Pushizo, env } = load();
     env.native.getPreferences.mockImplementationOnce(() => Promise.resolve(null));
-    await expect(Pushizo.User.getPreferences()).resolves.toEqual({ preferences: [], categories: [] });
+    await expect(Pushizo.User.getPreferences()).resolves.toEqual({ preferences: [], categories: [], consents: [] });
     env.native.getPreferences.mockImplementationOnce(() => Promise.resolve({ preferences: 'bozuk', categories: [null, 3] }));
-    await expect(Pushizo.User.getPreferences()).resolves.toEqual({ preferences: [], categories: [] });
+    await expect(Pushizo.User.getPreferences()).resolves.toEqual({ preferences: [], categories: [], consents: [] });
     env.native.getPreferences.mockImplementationOnce(() =>
       Promise.reject(Object.assign(new Error('Abonelik henüz kaydedilmedi'), { code: 'NOT_READY' })),
     );

@@ -427,6 +427,61 @@ class PushizoModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
     }
 
     @ReactMethod
+    fun isInitialized(promise: Promise) {
+        impl.isInitialized(promise)
+    }
+
+    @ReactMethod
+    fun loginWithProfile(externalId: String, profile: ReadableMap, identityHash: String?, jwt: String?, promise: Promise) {
+        impl.loginWithProfile(externalId, profile, identityHash, jwt, promise)
+    }
+
+    @ReactMethod
+    fun setAdsPersonalizationConsent(granted: Boolean, promise: Promise) {
+        impl.setAdsPersonalizationConsent(granted, promise)
+    }
+
+    @ReactMethod
+    fun getConsents(promise: Promise) {
+        impl.getConsents(promise)
+    }
+
+    @ReactMethod
+    fun registerAdm(token: String, promise: Promise) {
+        impl.registerAdm(token, promise)
+    }
+
+    @ReactMethod
+    fun setAdvertisingId(id: String?) {
+        impl.setAdvertisingId(id)
+    }
+
+    @ReactMethod
+    fun setBadgeCount(count: Double) {
+        impl.setBadgeCount(count)
+    }
+
+    @ReactMethod
+    fun chatIsListening(promise: Promise) {
+        impl.chatIsListening(promise)
+    }
+
+    @ReactMethod
+    fun locationPermissionGranted(promise: Promise) {
+        impl.locationPermissionGranted(promise)
+    }
+
+    @ReactMethod
+    fun locationBackgroundPermissionGranted(promise: Promise) {
+        impl.locationBackgroundPermissionGranted(promise)
+    }
+
+    @ReactMethod
+    fun requestBackgroundLocationPermission(rationale: String?, promise: Promise) {
+        impl.requestBackgroundLocationPermission(rationale, promise)
+    }
+
+    @ReactMethod
     fun setLogLevel(level: String) {
         impl.setLogLevel(level)
     }

@@ -366,6 +366,10 @@ export const Chat = {
   getVisitorId(): Promise<string | null> {
     return nativeModule().chatGetVisitorId();
   },
+  /** Gerçek zamanlı akış (`startListening`) açık mı. */
+  async isListening(): Promise<boolean> {
+    return (await nativeModule().chatIsListening()) === true;
+  },
   /** Sohbet olay dinleyicisi; `open` sohbet bildirimine tıklamadır (soğuk açılışta ilk dinleyiciye iletilir). */
   addEventListener<K extends keyof ChatEventMap>(event: K, listener: ChatListener<K>): void {
     if (typeof listener !== 'function') throw new TypeError('Pushizo: dinleyici bir fonksiyon olmalı.');

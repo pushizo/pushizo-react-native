@@ -36,6 +36,20 @@ export interface LoginOptions {
   identityHash?: string;
   /** SDK isteklerinde `Authorization: Bearer` başlığıyla gider; süresi dolunca `updateUserJwt` ile yenilenir. */
   jwt?: string;
+  /** Girişle birlikte ayarlanacak profil alanları (tek çağrı). */
+  profile?: UserProfile;
+}
+
+/**
+ * `Pushizo.login` ile birlikte ayarlanan profil. Geçersiz e-posta veya telefon girişten önce `INVALID_ARGUMENT` ile
+ * reddedilir; yarım kalmış bir kimlik değişimi olmaz.
+ */
+export interface UserProfile {
+  email?: string;
+  /** E.164 telefon numarası. */
+  sms?: string;
+  tags?: Record<string, string>;
+  aliases?: Record<string, string>;
 }
 
 /**
@@ -196,6 +210,20 @@ export interface PreferenceCategory {
 export interface UserPreferences {
   preferences: UserPreference[];
   categories: PreferenceCategory[];
+  /** Rıza kayıtları (`ads_personalization` …); eski API sürümlerinde boş. */
+  consents: UserConsent[];
+}
+
+/**
+ * Rıza kaydı (ADR-0037). `ads_personalization`: e-posta/telefon özetinin reklam platformu kitlelerine gönderilmesine
+ * açık onay. Varsayılan rıza yoktur; `source` kaydı yazan taraftır.
+ */
+export interface UserConsent {
+  purpose: string;
+  granted: boolean;
+  source: string | null;
+  /** Epoch milisaniye; kayıt yoksa `null`. */
+  updatedAt: number | null;
 }
 
 /** `User.setPreferences` girdisi; `channel` verilmezse veya `null` ise tüm kanallar. */
