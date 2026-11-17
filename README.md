@@ -303,6 +303,8 @@ kullanır (segmentli bayraklar kapalı döner).
 if (await Pushizo.FeatureFlags.isEnabled('yeni_sepet')) showNewCart();
 const limit = await Pushizo.FeatureFlags.getValue('sepet_limiti', 10);   // metin, sayı, mantıksal, nesne veya dizi
 const ok = await Pushizo.FeatureFlags.refresh();                        // hemen yenile; false → son değerler korunur
+const stop = Pushizo.FeatureFlags.addObserver(() => rerender());        // değerler sunucudan her yenilendiğinde
+stop();                                                                 // ya da removeObserver(aynıFonksiyon)
 ```
 
 | API | Açıklama |
@@ -310,6 +312,7 @@ const ok = await Pushizo.FeatureFlags.refresh();                        // hemen
 | `FeatureFlags.refresh()` | `Promise<boolean>`: yenileme başarılı mı. |
 | `FeatureFlags.isEnabled(key, defaultValue = false)` | `Promise<boolean>`: bayrak bu kullanıcı için açık mı; değer yoksa `defaultValue`. |
 | `FeatureFlags.getValue(key, defaultValue = null)` | `Promise<FeatureFlagValue>`: bayrağın değeri; değer yoksa `defaultValue`. |
+| `FeatureFlags.addObserver(listener)` / `removeObserver(listener)` | Değerler sunucudan her yenilendiğinde (oturum başı ve `refresh()`) çağrılır; olay yük taşımaz, güncel değer `isEnabled` / `getValue` ile okunur. `addObserver` gözlemciyi kaldıran fonksiyonu döndürür. |
 
 > SDK'ya giden değerler uygulama kimliğini bilen herkesçe okunabilir; parola, anahtar veya gizli bilgi yazmayın.
 
@@ -337,6 +340,25 @@ await Pushizo.Delivery.openSettings('auto_start');      // kendi arayüzünüzde
 Yalnızca Android'de etkilidir: iOS'ta `status()` `supported: false` ve `risk: 'none'` döner, `openSettings` ile `showGuidance`
 hiçbir şey yapmadan `false` döner. Köprü `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` iznini istemez ve manifest'e eklemez.
 
+### Kullanıcı özellikleri, kutu gözlemcisi ve olay kimliği
+
+```ts
+await Pushizo.User.setProperty('plan', 'pro');                       // metin, sayı, mantıksal, dizi veya düz nesne
+await Pushizo.User.setProperty('adres', { sehir: 'İzmir', etiketler: ['ev'] });
+await Pushizo.User.setProperty('plan', null);                        // null özelliği siler
+
+const stop = Pushizo.Inbox.addObserver(({ type, itemId, unreadCount }) => setBadge(unreadCount));
+stop();                                                              // ya da Inbox.removeObserver(aynıFonksiyon)
+
+Pushizo.Session.sendEvent('purchase', { sku: 'A1' }, 49.9, { eventId: 'order-1001' }); // tekilleştirme kimliği
+```
+
+| API | Açıklama |
+|-----|----------|
+| `User.setProperty(key, value)` | `Promise<void>`: kullanıcı özelliği yazar; `null` siler. Anahtar 1-64 karakter; değer metin, sonlu sayı, mantıksal ya da bunların dizisi/düz nesnesi (iç içe `null` desteklenmez). Geçersiz girdi çağrıdan önce `TypeError`, yerel doğrulamada `INVALID_ARGUMENT`. Çevrimdışıyken yerel SDK kuyruğunda bekler. |
+| `Inbox.addObserver(listener)` / `removeObserver(listener)` | Kutu değişim olayı `{ type, itemId?, unreadCount }`; `type`: `listed`, `read`, `read_all`, `archived`, `count`. `listed` ve `count` yalnızca okunmamış sayısı değiştiğinde, diğerleri her işlemde bildirilir; `itemId` yalnızca `read` ve `archived` olaylarında bulunur. `addObserver` gözlemciyi kaldıran fonksiyonu döndürür. |
+| `Session.sendEvent(name, properties?, value?, { eventId }?)` | `eventId`: 8-64 karakter; harf, rakam ve `. _ : -`. Reklam pikseli / Conversions API ile aynı kimlik verilirse sunucu olayı bir kez sayar (ADR-0038). Biçimi geçersiz kimlikte yerel SDK kendi kimliğini üretir; metin olmayan değer `TypeError`. |
+
 ### Rıza, reklam kimliği ve rozet
 
 ```ts
@@ -346,8 +368,9 @@ await Pushizo.User.setAdsPersonalizationConsent(true); // güncel tercihleri dö
 const consents = await Pushizo.User.getConsents();     // [{ purpose, granted, source, updatedAt }]
 Pushizo.Ads.setAdvertisingId(idfaOrGaid);              // null kaydı siler
 
-Pushizo.Notifications.setBadgeCount(3);                // iOS; Android'de etkisiz
-Pushizo.Notifications.clearBadge();
+const shown = await Pushizo.Notifications.setBadgeCount(3); // Android: rozet bu cihazda gösterilebiliyor mu; iOS: true
+await Pushizo.Notifications.clearBadge();
+const badge = await Pushizo.Notifications.getBadgeCount();
 ```
 
 | Metot | Açıklama |
@@ -357,7 +380,8 @@ Pushizo.Notifications.clearBadge();
 | `User.setAdsPersonalizationConsent(granted)` | `Promise<UserPreferences>`: e-posta/telefon özetinin reklam platformu kitlelerine gönderilmesine rıza (ADR-0037); `false` rızayı geri alır. |
 | `User.getConsents()` | `Promise<UserConsent[]>`: rıza kayıtları (`purpose`, `granted`, `source`, `updatedAt`). `getPreferences()` sonucu da `consents` içerir. |
 | `Ads.setAdvertisingId(id \| null)` | GAID / IDFA. Kimliği uygulama alır (SDK reklam kitaplığı ve ATT istemi içermez); yalnızca rıza varken ve SHA-256 özetiyle kullanılır. `null` kaydı siler. |
-| `Notifications.setBadgeCount(count)` / `clearBadge()` | iOS uygulama rozeti (NSE ile paylaşılan sayaç dahil). Android'de rozet görünen bildirimlerden hesaplandığından etkisizdir. |
+| `Notifications.setBadgeCount(count)` / `clearBadge()` | `Promise<boolean>` (beklemek zorunlu değildir; reddedilmez). iOS: uygulama rozeti ve NSE ile paylaşılan sayaç ayarlanır, sonuç `true`. Android: standart bir "rozeti ayarla" API'si olmadığından yerel SDK sayıyı saklar ve sonraki bildirimlere yazar (sayı gösteren başlatıcılar kullanır; tepside bildirim yokken rozet görünmez); sonuç rozet gösterilebiliyorsa `true` (Android 8 öncesi, bildirimler kapalı, kanal rozeti kapalı ya da SDK başlatılmamışsa `false`). |
+| `Notifications.getBadgeCount()` | `Promise<number>`: Android'de `setBadgeCount` ile saklanan son sayı, iOS'ta uygulama simgesindeki rozet sayısı. |
 | `User.registerAdm(token)` | Fire OS ADM kayıt kimliği (ADM kaydını kendisi yapan uygulamalar için); iOS'ta etkisizdir. |
 | `Chat.isListening()` | `Promise<boolean>`: gerçek zamanlı sohbet akışı açık mı. |
 
@@ -373,6 +397,10 @@ Pushizo.Chat.startListening();                           // ekran açıkken; ayr
 await Pushizo.Chat.sendMessage('Merhaba');               // bot hızlı yanıtı: sendMessage(label, { optionId })
 await Pushizo.Chat.sendAttachment({ uri: 'file:///…/rapor.pdf' }, { fileName: 'rapor.pdf', mimeType: 'application/pdf' });
 await Pushizo.Chat.markRead(messages[messages.length - 1].seq);
+
+Pushizo.Chat.show();                                     // hazır sohbet ekranı (kendi arayüzünüz yerine)
+const open = await Pushizo.Chat.isPresented();
+const closed = await Pushizo.Chat.hide();                // açık ekran varsa true
 ```
 
 Ziyaretçi kimliği, çevrimdışı kuyruk (aynı `client_message_id` ile yeniden deneme), canlı akış (SSE; koparsa üstel
@@ -382,6 +410,12 @@ Mesajlar `seq` ile sıralanır; ağ yokken gönderilen mesaj `pending` döner ve
 Ayrıntı: [android rehberi](https://docs.pushizo.com/docs/sdk/android) / [ios rehberi](https://docs.pushizo.com/docs/sdk/ios) → "Canlı sohbet".
 Olaylar: `message`, `typing`, `read`, `unread`, `conversation`, `connection`, `error`, `open` (soğuk açılışta
 ilk dinleyiciye iletilir).
+
+**Hazır sohbet ekranı.** `Chat.show()` yerel SDK'nın sohbet arayüzünü açar: Android'de tam ekran `HsChatActivity`
+(ön plandaki Activity'nin görevinde; Activity yoksa yeni görevde), iOS'ta modal `HSChatViewController`. Ekran zaten
+açıksa yenisi açılmaz; `Pushizo.initialize` çağrılmadıysa hiçbir şey yapılmaz. `Chat.hide()` ekranı kapatır ve
+kapatılacak açık bir ekran varsa `true` döner; `Chat.isPresented()` ekranın açık olup olmadığını verir (iOS'ta yerel
+`Chat.isPresented`; Android yerel SDK'sında karşılığı olmadığından köprü açık ekranı Activity yaşam döngüsünden izler).
 
 ### Konum
 
@@ -500,7 +534,8 @@ NSE; zengin medya (resim), aksiyon düğmeleri, rozet artışı (`badge_inc`) ve
 | Expo | `plugin/src` → `plugin/build`, `app.plugin.js`, `plugin/templates` |
 
 Olaylar: `Pushizo-notificationClick`, `Pushizo-notificationWillDisplay`, `Pushizo-permissionChange`,
-`Pushizo-pushSubscriptionChange`, `Pushizo-inAppClick`, `Pushizo-inAppLifecycle`. In-app mesajlar yerel
+`Pushizo-pushSubscriptionChange`, `Pushizo-inAppClick`, `Pushizo-inAppLifecycle`, `Pushizo-featureFlagsChange`,
+`Pushizo-inboxChange`, `Pushizo-chatEvent`, `Pushizo-chatOpen`. In-app mesajlar yerel
 SDK'nın varsayılan çizimiyle (Android Dialog, iOS UIWindow) gösterilir.
 
 `Pushizo-permissionChange` yerel SDK izin gözlemcisinden (`Pushizo.Notifications.addPermissionObserver`, Android ve

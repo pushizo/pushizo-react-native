@@ -364,8 +364,32 @@ class PushizoModule(reactContext: ReactApplicationContext) : NativePushizoSpec(r
         impl.setAdvertisingId(id)
     }
 
-    override fun setBadgeCount(count: Double) {
-        impl.setBadgeCount(count)
+    override fun setBadgeCount(count: Double, promise: Promise) {
+        impl.setBadgeCount(count, promise)
+    }
+
+    override fun getBadgeCount(promise: Promise) {
+        impl.getBadgeCount(promise)
+    }
+
+    override fun setUserProperty(key: String, property: ReadableMap, promise: Promise) {
+        impl.setUserProperty(key, property, promise)
+    }
+
+    override fun sendEventWithId(name: String, properties: ReadableMap, value: Double?, eventId: String) {
+        impl.sendEventWithId(name, properties, value, eventId)
+    }
+
+    override fun chatShow() {
+        impl.chatShow()
+    }
+
+    override fun chatHide(promise: Promise) {
+        impl.chatHide(promise)
+    }
+
+    override fun chatIsPresented(promise: Promise) {
+        impl.chatIsPresented(promise)
     }
 
     override fun chatIsListening(promise: Promise) {

@@ -457,8 +457,38 @@ class PushizoModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
     }
 
     @ReactMethod
-    fun setBadgeCount(count: Double) {
-        impl.setBadgeCount(count)
+    fun setBadgeCount(count: Double, promise: Promise) {
+        impl.setBadgeCount(count, promise)
+    }
+
+    @ReactMethod
+    fun getBadgeCount(promise: Promise) {
+        impl.getBadgeCount(promise)
+    }
+
+    @ReactMethod
+    fun setUserProperty(key: String, property: ReadableMap, promise: Promise) {
+        impl.setUserProperty(key, property, promise)
+    }
+
+    @ReactMethod
+    fun sendEventWithId(name: String, properties: ReadableMap, value: Dynamic, eventId: String) {
+        impl.sendEventWithId(name, properties, value.numberOrNull(), eventId)
+    }
+
+    @ReactMethod
+    fun chatShow() {
+        impl.chatShow()
+    }
+
+    @ReactMethod
+    fun chatHide(promise: Promise) {
+        impl.chatHide(promise)
+    }
+
+    @ReactMethod
+    fun chatIsPresented(promise: Promise) {
+        impl.chatIsPresented(promise)
     }
 
     @ReactMethod

@@ -102,6 +102,7 @@ function createNative(): Record<string, jest.Mock> {
     setAdsPersonalizationConsent: resolved(PREFERENCES_RAW),
     getConsents: resolved([{ purpose: 'ads_personalization', granted: false, source: null, updatedAt: null }, { granted: true }, 'bozuk']),
     registerAdm: resolved(),
+    setUserProperty: resolved(),
     setAdvertisingId: jest.fn(),
     getPushSubscriptionState: resolved({ id: 'sub_1', token: 'tok', optedIn: true, permission: true }),
     optIn: jest.fn(),
@@ -111,11 +112,13 @@ function createNative(): Record<string, jest.Mock> {
     clearAll: jest.fn(),
     removeNotification: resolved(),
     removeGroupedNotifications: resolved(),
-    setBadgeCount: jest.fn(),
+    setBadgeCount: resolved(true),
+    getBadgeCount: resolved(3),
     setForegroundHandlerEnabled: jest.fn(),
     displayNotification: jest.fn(),
     preventDefault: jest.fn(),
     sendEvent: jest.fn(),
+    sendEventWithId: jest.fn(),
     addTriggers: resolved(),
     removeTriggers: jest.fn(),
     clearTriggers: jest.fn(),
@@ -692,14 +695,135 @@ describe('Pushizo (React Native)', () => {
 
   test('Notifications.setBadgeCount / clearBadge: negatif olmayan tam sayı yerel modüle iletilir', () => {
     const { Pushizo, env } = load();
-    Pushizo.Notifications.setBadgeCount(3);
+    void Pushizo.Notifications.setBadgeCount(3);
     expect(env.native.setBadgeCount).toHaveBeenLastCalledWith(3);
-    Pushizo.Notifications.clearBadge();
+    void Pushizo.Notifications.clearBadge();
     expect(env.native.setBadgeCount).toHaveBeenLastCalledWith(0);
     expect(() => Pushizo.Notifications.setBadgeCount(-1)).toThrow('count');
     expect(() => Pushizo.Notifications.setBadgeCount(1.5)).toThrow('count');
     expect(() => Pushizo.Notifications.setBadgeCount('2' as never)).toThrow('count');
     expect(env.native.setBadgeCount).toHaveBeenCalledTimes(2);
+  });
+
+  test('Notifications rozeti: yerel sonuç (rozet gösterilebiliyor mu) döner; hata ya da eski yerel modül false, getBadgeCount sayıyı okur', async () => {
+    const { Pushizo, env } = load();
+    await expect(Pushizo.Notifications.setBadgeCount(5)).resolves.toBe(true);
+    await expect(Pushizo.Notifications.clearBadge()).resolves.toBe(true);
+    // Android: bildirimler kapalı / kanal rozeti kapalı → false.
+    env.native.setBadgeCount.mockImplementationOnce(() => Promise.resolve(false));
+    await expect(Pushizo.Notifications.setBadgeCount(1)).resolves.toBe(false);
+    // Sonuç beklenmese de işlenmemiş reddetme oluşmaz: yerel hata false olur.
+    env.native.setBadgeCount.mockImplementationOnce(() => Promise.reject(new Error('yerel hata')));
+    await expect(Pushizo.Notifications.setBadgeCount(1)).resolves.toBe(false);
+    env.native.setBadgeCount.mockImplementationOnce(() => undefined as never);
+    await expect(Pushizo.Notifications.clearBadge()).resolves.toBe(false);
+
+    await expect(Pushizo.Notifications.getBadgeCount()).resolves.toBe(3);
+    env.native.getBadgeCount.mockImplementationOnce(() => Promise.resolve(null));
+    await expect(Pushizo.Notifications.getBadgeCount()).resolves.toBe(0);
+    env.native.getBadgeCount.mockImplementationOnce(() => Promise.resolve(-2.5));
+    await expect(Pushizo.Notifications.getBadgeCount()).resolves.toBe(0);
+  });
+
+  test('User.setProperty: değer `{ value }` zarfıyla yerel modüle iletilir; null özelliği siler', async () => {
+    const { Pushizo, env } = load();
+    await Pushizo.User.setProperty('plan', 'pro');
+    expect(env.native.setUserProperty).toHaveBeenLastCalledWith('plan', { value: 'pro' });
+    await Pushizo.User.setProperty('age', 34);
+    expect(env.native.setUserProperty).toHaveBeenLastCalledWith('age', { value: 34 });
+    await Pushizo.User.setProperty('vip', false);
+    expect(env.native.setUserProperty).toHaveBeenLastCalledWith('vip', { value: false });
+    await Pushizo.User.setProperty('interests', ['spor', 'müzik', 3]);
+    expect(env.native.setUserProperty).toHaveBeenLastCalledWith('interests', { value: ['spor', 'müzik', 3] });
+    await Pushizo.User.setProperty('address', { city: 'İzmir', geo: { lat: 38.4, tags: ['ev'] } });
+    expect(env.native.setUserProperty).toHaveBeenLastCalledWith('address', { value: { city: 'İzmir', geo: { lat: 38.4, tags: ['ev'] } } });
+    await Pushizo.User.setProperty('plan', null);
+    expect(env.native.setUserProperty).toHaveBeenLastCalledWith('plan', { value: null });
+    await Pushizo.User.setProperty('plan', undefined as never);
+    expect(env.native.setUserProperty).toHaveBeenLastCalledWith('plan', { value: null });
+    expect(env.native.setUserProperty).toHaveBeenCalledTimes(7);
+  });
+
+  test('User.setProperty: geçersiz anahtar ve değer yerel modüle gitmeden reddedilir; yerel INVALID_ARGUMENT iletilir', async () => {
+    const { Pushizo, env } = load();
+    expect(() => Pushizo.User.setProperty(' ', 'x')).toThrow('key');
+    expect(() => Pushizo.User.setProperty('k'.repeat(65), 'x')).toThrow('key');
+    expect(() => Pushizo.User.setProperty(5 as never, 'x')).toThrow('key');
+    expect(() => Pushizo.User.setProperty('n', Number.NaN)).toThrow('value');
+    expect(() => Pushizo.User.setProperty('d', new Date() as never)).toThrow('value');
+    expect(() => Pushizo.User.setProperty('f', (() => 1) as never)).toThrow('value');
+    // İç içe null yerel SDK'larda farklı ele alınır (iOS yok sayar): önceden reddedilir.
+    expect(() => Pushizo.User.setProperty('l', ['a', null] as never)).toThrow('value[1]');
+    expect(() => Pushizo.User.setProperty('o', { a: { b: undefined } } as never)).toThrow('value.a.b');
+    expect(env.native.setUserProperty).not.toHaveBeenCalled();
+
+    env.native.setUserProperty.mockImplementationOnce(() =>
+      Promise.reject(Object.assign(new Error('Özellik anahtarı boş olamaz.'), { code: 'INVALID_ARGUMENT' })),
+    );
+    await expect(Pushizo.User.setProperty('plan', 'pro')).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
+  test('FeatureFlags.addObserver / removeObserver: yerel yenileme olayı gözlemcilere iletilir; abonelik son gözlemcide kapanır', () => {
+    const { Pushizo, env } = load();
+    const first = jest.fn();
+    const second = jest.fn();
+    const unsubscribe = Pushizo.FeatureFlags.addObserver(first);
+    Pushizo.FeatureFlags.addObserver(second);
+    // Aynı gözlemci iki kez eklenmez.
+    Pushizo.FeatureFlags.addObserver(second);
+    expect(env.listenerCount('Pushizo-featureFlagsChange')).toBe(1);
+    expect(env.native.addListener).toHaveBeenCalledWith('Pushizo-featureFlagsChange');
+
+    env.emit('Pushizo-featureFlagsChange', {});
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+
+    unsubscribe();
+    env.emit('Pushizo-featureFlagsChange', {});
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(2);
+    expect(env.listenerCount('Pushizo-featureFlagsChange')).toBe(1);
+    Pushizo.FeatureFlags.removeObserver(second);
+    expect(env.listenerCount('Pushizo-featureFlagsChange')).toBe(0);
+    // Kayıtlı olmayan gözlemciyi kaldırmak zararsızdır.
+    Pushizo.FeatureFlags.removeObserver(second);
+    expect(() => Pushizo.FeatureFlags.addObserver('x' as never)).toThrow('dinleyici');
+  });
+
+  test('Inbox.addObserver / removeObserver: değişim olayı tipli modele çevrilir; itemId yalnızca tek öğe olaylarında bulunur', () => {
+    const { Pushizo, env } = load();
+    const events: unknown[] = [];
+    const observer = (event: unknown) => events.push(event);
+    const unsubscribe = Pushizo.Inbox.addObserver(observer);
+    expect(env.listenerCount('Pushizo-inboxChange')).toBe(1);
+
+    // Android `HsInboxChangeEvent.toMap()` itemId'yi null, iOS `dictionary` hiç göndermez.
+    env.emit('Pushizo-inboxChange', { type: 'listed', itemId: null, unreadCount: 4 });
+    env.emit('Pushizo-inboxChange', { type: 'read', itemId: 'i1', unreadCount: 3 });
+    env.emit('Pushizo-inboxChange', { type: 'read_all', unreadCount: 0 });
+    env.emit('Pushizo-inboxChange', { type: 'archived', itemId: 'i2', unreadCount: 0 });
+    env.emit('Pushizo-inboxChange', { type: 'count', unreadCount: 2.9 });
+    // Tanınmayan tür ve bozuk sayı güvenli varsayılana düşer.
+    env.emit('Pushizo-inboxChange', { type: 'gelecek', itemId: 7, unreadCount: -1 });
+    env.emit('Pushizo-inboxChange', null);
+    expect(events).toEqual([
+      { type: 'listed', unreadCount: 4 },
+      { type: 'read', itemId: 'i1', unreadCount: 3 },
+      { type: 'read_all', unreadCount: 0 },
+      { type: 'archived', itemId: 'i2', unreadCount: 0 },
+      { type: 'count', unreadCount: 2 },
+      { type: 'count', unreadCount: 0 },
+      { type: 'count', unreadCount: 0 },
+    ]);
+
+    unsubscribe();
+    expect(env.listenerCount('Pushizo-inboxChange')).toBe(0);
+    env.emit('Pushizo-inboxChange', { type: 'count', unreadCount: 9 });
+    expect(events).toHaveLength(7);
+    Pushizo.Inbox.addObserver(observer);
+    Pushizo.Inbox.removeObserver(observer);
+    expect(env.listenerCount('Pushizo-inboxChange')).toBe(0);
+    expect(() => Pushizo.Inbox.addObserver(undefined as never)).toThrow('dinleyici');
   });
 
   test('Location: izin durumu ve arka plan izni isteği yerel modüle iletilir', async () => {
@@ -988,8 +1112,29 @@ describe('Pushizo (React Native)', () => {
     expect(env.native.sendEvent).toHaveBeenNthCalledWith(1, 'purchase', { sku: 'a1' }, 49.9);
     expect(env.native.sendEvent).toHaveBeenNthCalledWith(2, 'viewed', {}, null);
     expect(() => Pushizo.Session.sendEvent('x', {}, Number.NaN)).toThrow('value');
+    expect(env.native.sendEventWithId).not.toHaveBeenCalled();
     Pushizo.Debug.setLogLevel(LogLevel.Info);
     expect(env.native.setLogLevel).toHaveBeenCalledWith('info');
     expect(() => Pushizo.Debug.setLogLevel('trace' as never)).toThrow('günlük seviyesi');
+  });
+
+  test('Session.sendEvent: eventId verilirse sendEventWithId çağrılır; boş kimlik eski yerel metoda düşer', () => {
+    const { Pushizo, env } = load();
+    Pushizo.Session.sendEvent('purchase', { sku: 'a1' }, 49.9, { eventId: 'order-1001:purchase' });
+    expect(env.native.sendEventWithId).toHaveBeenLastCalledWith('purchase', { sku: 'a1' }, 49.9, 'order-1001:purchase');
+    Pushizo.Session.sendEvent('viewed', undefined, undefined, { eventId: 'evt_12345678' });
+    expect(env.native.sendEventWithId).toHaveBeenLastCalledWith('viewed', {}, null, 'evt_12345678');
+    // Biçimi geçersiz kimlik yerel SDK'ya bırakılır (kendi kimliğini üretir).
+    Pushizo.Session.sendEvent('viewed', {}, undefined, { eventId: 'kısa' });
+    expect(env.native.sendEventWithId).toHaveBeenLastCalledWith('viewed', {}, null, 'kısa');
+    expect(env.native.sendEvent).not.toHaveBeenCalled();
+
+    Pushizo.Session.sendEvent('viewed', {}, 1, {});
+    Pushizo.Session.sendEvent('viewed', {}, 1, { eventId: '' });
+    Pushizo.Session.sendEvent('viewed', {}, 1, { eventId: undefined });
+    expect(env.native.sendEvent).toHaveBeenCalledTimes(3);
+    expect(env.native.sendEvent).toHaveBeenLastCalledWith('viewed', {}, 1);
+    expect(() => Pushizo.Session.sendEvent('viewed', {}, 1, { eventId: 42 as never })).toThrow('eventId');
+    expect(env.native.sendEventWithId).toHaveBeenCalledTimes(3);
   });
 });

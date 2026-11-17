@@ -57,6 +57,9 @@ export interface Spec extends TurboModule {
   getConsents(): Promise<Array<Object>>;
   /** Fire OS ADM kayıt kimliği (yalnızca Android; iOS'ta etkisiz). */
   registerAdm(token: string): Promise<void>;
+  /** property: `{ value }` zarfı (metin, sayı, mantıksal, dizi, nesne; `null` özelliği siler). Geçersiz anahtar/değer `INVALID_ARGUMENT`. */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  setUserProperty(key: string, property: Object): Promise<void>;
 
   // --- Reklam kimliği (ADR-0037) ---
   /** GAID / IDFA; `null` veya sıfır kimlik sunucudaki kaydı siler. */
@@ -76,8 +79,13 @@ export interface Spec extends TurboModule {
   removeNotification(id: string): Promise<void>;
   /** Android `android_group`, iOS `thread-id` grubundaki bildirimleri kaldırır. */
   removeGroupedNotifications(group: string): Promise<void>;
-  /** Uygulama rozeti (yalnızca iOS; Android'de rozet görünen bildirimlerden hesaplandığından etkisiz). */
-  setBadgeCount(count: number): void;
+  /**
+   * Uygulama rozeti. iOS: rozet ve NSE ile paylaşılan sayaç ayarlanır (sonuç `true`). Android: sayı saklanır ve sonraki
+   * bildirimlere yazılır; sonuç rozet bu cihazda gösterilebiliyor mu.
+   */
+  setBadgeCount(count: number): Promise<boolean>;
+  /** Android: `setBadgeCount` ile saklanan son sayı; iOS: uygulama simgesindeki rozet sayısı. */
+  getBadgeCount(): Promise<number>;
   setForegroundHandlerEnabled(enabled: boolean): void;
   /** Ön plan olayı için bildirimi gösterir (bir kez). */
   displayNotification(notificationId: string): void;
@@ -87,6 +95,9 @@ export interface Spec extends TurboModule {
   // --- Oturum / olay ---
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
   sendEvent(name: string, properties: Object, value: number | null): void;
+  /** `sendEvent` ile aynı; `eventId` tekilleştirme kimliğidir (geçersiz biçimde yerel SDK kendi kimliğini üretir). */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  sendEventWithId(name: string, properties: Object, value: number | null, eventId: string): void;
 
   // --- In-app ---
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
@@ -145,6 +156,12 @@ export interface Spec extends TurboModule {
   chatGetVisitorId(): Promise<string | null>;
   /** Gerçek zamanlı akış açık mı. */
   chatIsListening(): Promise<boolean>;
+  /** Hazır sohbet ekranını açar (Android `HsChatActivity`, iOS `HSChatViewController`); SDK başlatılmadıysa etkisiz. */
+  chatShow(): void;
+  /** Hazır sohbet ekranını kapatır; sonuç: kapatılacak açık bir ekran var mıydı. */
+  chatHide(): Promise<boolean>;
+  /** Hazır sohbet ekranı şu an açık mı. */
+  chatIsPresented(): Promise<boolean>;
 
   // --- Live Activities (yalnızca iOS 16.1+; Android `PLATFORM_NOT_SUPPORTED` ile reddeder) ---
   /** Genel `PushizoDefaultLiveActivityAttributes` türünü izlemeye alır (push-to-start ve güncelleme belirteçleri). */

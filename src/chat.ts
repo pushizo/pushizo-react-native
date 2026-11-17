@@ -370,6 +370,22 @@ export const Chat = {
   async isListening(): Promise<boolean> {
     return (await nativeModule().chatIsListening()) === true;
   },
+  /**
+   * Hazır sohbet ekranını açar (Android tam ekran `HsChatActivity`, iOS modal `HSChatViewController`); ekran zaten
+   * açıksa yenisi açılmaz. `Pushizo.initialize` çağrılmadıysa hiçbir şey yapılmaz. Kendi arayüzünüzü çizmek için
+   * `getMessages` / `sendMessage` ve olayları kullanın.
+   */
+  show(): void {
+    nativeModule().chatShow();
+  },
+  /** `show` ile açılan sohbet ekranını kapatır; kapatılacak açık bir ekran varsa `true`. */
+  async hide(): Promise<boolean> {
+    return (await nativeModule().chatHide()) === true;
+  },
+  /** `show` ile açılan sohbet ekranı şu an açık mı. */
+  async isPresented(): Promise<boolean> {
+    return (await nativeModule().chatIsPresented()) === true;
+  },
   /** Sohbet olay dinleyicisi; `open` sohbet bildirimine tıklamadır (soğuk açılışta ilk dinleyiciye iletilir). */
   addEventListener<K extends keyof ChatEventMap>(event: K, listener: ChatListener<K>): void {
     if (typeof listener !== 'function') throw new TypeError('Pushizo: dinleyici bir fonksiyon olmalı.');

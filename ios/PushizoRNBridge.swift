@@ -4,7 +4,6 @@ import Pushizo
 #if canImport(PushizoCore)
 import PushizoCore
 #endif
-import CoreLocation
 import UIKit
 import UserNotifications
 
@@ -27,9 +26,12 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
     @objc public static let eventInAppLifecycle = "Pushizo-inAppLifecycle"
     @objc public static let eventChat = "Pushizo-chatEvent"
     @objc public static let eventChatOpen = "Pushizo-chatOpen"
+    @objc public static let eventFeatureFlags = "Pushizo-featureFlagsChange"
+    @objc public static let eventInbox = "Pushizo-inboxChange"
 
     @objc public static var supportedEvents: [String] {
-        [eventClick, eventForeground, eventPermission, eventSubscription, eventInAppClick, eventInAppLifecycle, eventChat, eventChatOpen]
+        [eventClick, eventForeground, eventPermission, eventSubscription, eventInAppClick, eventInAppLifecycle, eventChat, eventChatOpen,
+         eventFeatureFlags, eventInbox]
     }
 
     /// Info.plist anahtarları (Expo config plugin yazar; bare RN'de elle eklenebilir).
@@ -187,6 +189,14 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
         Pushizo.Notifications.addPermissionObserver { [weak self] granted in
             self?.emit(Self.eventPermission, ["permission": granted])
         }
+        // Bayrak değerleri sunucudan yenilendi: olay yük taşımaz, JS güncel değeri okur.
+        Pushizo.FeatureFlags.addObserver { [weak self] in
+            self?.emit(Self.eventFeatureFlags, [:])
+        }
+        // Kutu değişimi: `{ type, itemId?, unreadCount }`.
+        Pushizo.Inbox.addObserver { [weak self] event in
+            self?.emit(Self.eventInbox, event.dictionary)
+        }
         Task { [weak self] in
             let state = await Pushizo.User.pushSubscription.state()
             self?.onMain {
@@ -217,23 +227,29 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
 
     @objc public func isInitialized() -> Bool { Pushizo.isInitialized }
 
-    /// Yerel iOS SDK'da profil aşırı yüklemesi yoktur; Android `login(externalId, HsUserProfile)` davranışı burada uygulanır:
-    /// e-posta/telefon girişten ÖNCE doğrulanır (yarım kimlik değişimi olmaz), sonra giriş ve profil alanları yazılır.
+    /// Yerel `Pushizo.login(_:profile:identityHash:jwt:)` çağrısı: profil (e-posta, telefon, alias) girişten ÖNCE doğrulanır
+    /// (yarım kimlik değişimi olmaz), profil işlemleri girişten sonra kuyruğa yazılır. Hata kodları Android köprüsüyle aynıdır:
+    /// geçersiz profil `INVALID_ARGUMENT`, başlatılmamış SDK ve app kipine uymayan kanıt `NOT_READY`.
     @objc public func loginWithProfile(_ externalId: String, profile: [String: Any], identityHash: String?, jwt: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
         guard Pushizo.isInitialized else { reject("NOT_READY", "Pushizo.initialize önce çağrılmalı", nil); return }
-        let email = profile["email"] as? String
-        let sms = profile["sms"] as? String
-        if let email = email, HSContacts.normalizeEmail(email) == nil { reject("INVALID_ARGUMENT", "Geçersiz e-posta adresi", nil); return }
-        if let sms = sms, HSContacts.normalizePhone(sms) == nil { reject("INVALID_ARGUMENT", "Geçersiz telefon numarası", nil); return }
+        let userProfile = HSUserProfile(
+            email: profile["email"] as? String,
+            sms: profile["sms"] as? String,
+            tags: Self.stringMap(profile["tags"] as? [String: Any] ?? [:]),
+            aliases: Self.stringMap(profile["aliases"] as? [String: Any] ?? [:])
+        )
+        // Yerel çağrı kanıt hatasını da `invalidArgument` olarak fırlatır; kod `login` ile aynı kalsın diye profil ve kanıt
+        // burada aynı sırayla (önce profil) ayrıştırılır.
+        if let message = userProfile.validationError { reject("INVALID_ARGUMENT", message, nil); return }
         if let message = Pushizo.loginProofError(identityHash: identityHash, jwt: jwt) { reject("NOT_READY", message, nil); return }
-        Pushizo.login(externalId, identityHash: identityHash, jwt: jwt)
-        if let email = email { Pushizo.User.addEmail(email) }
-        if let sms = sms { Pushizo.User.addSms(sms) }
-        let tags = Self.stringMap(profile["tags"] as? [String: Any] ?? [:])
-        if !tags.isEmpty { Pushizo.User.addTags(tags) }
-        let aliases = Self.stringMap(profile["aliases"] as? [String: Any] ?? [:])
-        if !aliases.isEmpty { Pushizo.User.addAliases(aliases) }
-        resolve(nil)
+        do {
+            try Pushizo.login(externalId, profile: userProfile, identityHash: identityHash, jwt: jwt)
+            resolve(nil)
+        } catch HSError.invalidArgument(let message) {
+            reject("INVALID_ARGUMENT", message, nil)
+        } catch {
+            reject("NOT_READY", "Pushizo.initialize önce çağrılmalı", error)
+        }
     }
 
     @objc public func updateUserJwt(_ jwt: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
@@ -305,6 +321,19 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
     /// Bu cihazda kaydedilmiş e-posta adresleri ve SMS numaraları (yerel kayıt).
     @objc public func emails() -> [String] { Pushizo.User.emails }
     @objc public func smsNumbers() -> [String] { Pushizo.User.smsNumbers }
+
+    /// Kullanıcı özelliği: değer `{ value }` zarfıyla gelir (`NSNull` / eksik değer özelliği siler). Kurallar yerel SDK ile
+    /// aynı; geçersizse `INVALID_ARGUMENT` (yerel SDK yalnızca günlüğe yazar).
+    @objc public func setUserProperty(_ key: String, property: [String: Any], resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
+        let raw = property["value"]
+        let value: Any? = raw is NSNull ? nil : raw
+        guard HSUserProperties.operation(key: key, value: value) != nil else {
+            reject("INVALID_ARGUMENT", "Geçersiz kullanıcı özelliği: anahtar 1-64 karakter; değer metin, sayı, mantıksal, dizi veya nesne.", nil)
+            return
+        }
+        Pushizo.User.setProperty(key, value)
+        resolve(nil)
+    }
 
     // MARK: - Tercihler (ADR-0019 §4; abonelik yoksa NOT_READY, geçersiz girdi INVALID_ARGUMENT)
 
@@ -382,6 +411,11 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
         if count <= 0 { Pushizo.Notifications.clearBadge() } else { Pushizo.Notifications.setBadgeCount(count) }
     }
 
+    /// Uygulama simgesindeki rozet sayısı (yerel SDK okuma sunmaz; UIKit'ten ana iş parçacığında okunur).
+    @objc public func getBadgeCount(_ resolve: @escaping (Any?) -> Void) {
+        onMain { resolve(UIApplication.shared.applicationIconBadgeNumber) }
+    }
+
     @objc public func setForegroundHandlerEnabled(_ enabled: Bool) { onMain { self.foregroundHandlerEnabled = enabled } }
 
     @objc public func displayNotification(_ id: String) { onMain { self.foregroundEvents.removeValue(forKey: id)?.display() } }
@@ -394,6 +428,11 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
 
     @objc public func sendEvent(_ name: String, properties: [String: Any], value: NSNumber?) {
         Pushizo.Session.sendEvent(name, properties: properties, value: value?.doubleValue)
+    }
+
+    /// Tekilleştirme kimliğiyle olay; kimlik biçimi geçersizse yerel SDK kendi kimliğini üretir.
+    @objc public func sendEventWithId(_ name: String, properties: [String: Any], value: NSNumber?, eventId: String) {
+        Pushizo.Session.sendEvent(name, properties: properties, value: value?.doubleValue, eventId: eventId)
     }
 
     // MARK: - In-app
@@ -522,6 +561,23 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
 
     @objc public func chatIsListening() -> Bool { Pushizo.Chat.isListening }
 
+    /// Hazır sohbet ekranını etkin sahnenin en üstteki görünüm denetleyicisinden modal açar; SDK başlatılmadıysa etkisiz.
+    @objc public func chatShow() {
+        guard Pushizo.isInitialized else { return }
+        Pushizo.Chat.show()
+    }
+
+    /// Sohbet ekranını kapatır; sonuç: kapatılacak açık bir ekran var mıydı (Android `PushizoChat.hide()` ile aynı).
+    @objc public func chatHide(_ resolve: @escaping (Any?) -> Void) {
+        onMain {
+            let presented = Pushizo.Chat.isPresented
+            Pushizo.Chat.hide()
+            resolve(presented)
+        }
+    }
+
+    @objc public func chatIsPresented(_ resolve: @escaping (Any?) -> Void) { onMain { resolve(Pushizo.Chat.isPresented) } }
+
     // MARK: - Bildirim kutusu
 
     @objc public func inboxList(_ limit: Double, cursor: String?, resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
@@ -631,23 +687,15 @@ public final class PushizoRNBridge: NSObject, HSInAppLifecycleListener {
         Pushizo.Location.requestPermission(rationale: text) { granted in resolve(granted) }
     }
 
-    /// Yerel iOS SDK izin durumunu sunmaz; `CLLocationManager` yetki durumundan okunur ("kullanırken" veya "her zaman").
-    @objc public func locationPermissionGranted() -> Bool {
-        let status = Self.locationAuthorizationStatus()
-        return status == .authorizedWhenInUse || status == .authorizedAlways
-    }
+    /// Konum izni ("kullanırken" veya "her zaman") verilmiş mi; istem göstermez.
+    @objc public func locationPermissionGranted() -> Bool { Pushizo.Location.permissionGranted }
 
-    /// "Her zaman" konum izni verilmiş mi (bölge izleme için gerekir).
-    @objc public func locationBackgroundPermissionGranted() -> Bool { Self.locationAuthorizationStatus() == .authorizedAlways }
+    /// "Her zaman" konum izni verilmiş mi (bölge izleme için gerekir); istem göstermez.
+    @objc public func locationBackgroundPermissionGranted() -> Bool { Pushizo.Location.backgroundPermissionGranted }
 
     /// "Her zaman" konum izni; önce "kullanırken" izni verilmiş olmalıdır. Sonuç yerel SDK'dan ana iş parçacığında gelir.
     @objc public func requestBackgroundLocationPermission(_ resolve: @escaping (Any?) -> Void) {
         onMain { Pushizo.Location.requestAlwaysPermission { granted in resolve(granted) } }
-    }
-
-    private static func locationAuthorizationStatus() -> CLAuthorizationStatus {
-        if #available(iOS 14.0, *) { return CLLocationManager().authorizationStatus }
-        return CLLocationManager.authorizationStatus()
     }
 
     /// Arka plan bölge izleme (ADR-0065; varsayılan kapalı). Köprü "her zaman" konum iznini istemez, Info.plist'e anahtar eklemez.

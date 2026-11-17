@@ -158,6 +158,15 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
         promise.resolve(null)
     }
 
+    /**
+     * Kullanıcı özelliği: değer `{ value }` zarfıyla gelir (metin, sayı, mantıksal, dizi, nesne; `null` özelliği siler).
+     * Boş anahtar yerel SDK'dan `IllegalArgumentException` → `INVALID_ARGUMENT`.
+     */
+    fun setUserProperty(key: String, property: ReadableMap, promise: Promise) = guard(promise) {
+        Pushizo.User.setProperty(key, property.toHashMap()["value"])
+        promise.resolve(null)
+    }
+
     // --- Reklam kimliği (ADR-0037) ---
 
     fun setAdvertisingId(id: String?) = Pushizo.Ads.setAdvertisingId(id)
@@ -217,9 +226,16 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
         promise.resolve(null)
     }
 
-    /** Android'de başlatıcı rozeti görünen bildirimlerden hesaplanır; ayrı bir sayaç yoktur, çağrı etkisizdir. */
-    @Suppress("UNUSED_PARAMETER")
-    fun setBadgeCount(count: Double) = Unit
+    /**
+     * Yerel SDK sayıyı saklar ve sonraki bildirimlere yazar (Android'de standart "rozeti ayarla" API'si yoktur). Sonuç:
+     * rozet bu cihazda gösterilebiliyor mu (Android 8+, bildirimler açık, kanal rozete izin veriyor).
+     */
+    fun setBadgeCount(count: Double, promise: Promise) = guard(promise) {
+        promise.resolve(Pushizo.Notifications.setBadgeCount(count.toInt()))
+    }
+
+    /** `setBadgeCount` ile saklanan son sayı. */
+    fun getBadgeCount(promise: Promise) = promise.resolve(Pushizo.Notifications.badgeCount)
 
     fun setForegroundHandlerEnabled(enabled: Boolean) {
         PushizoBridge.foregroundHandlerEnabled = enabled
@@ -233,6 +249,10 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
 
     fun sendEvent(name: String, properties: ReadableMap, value: Double?) =
         Pushizo.Session.sendEvent(name, properties.toHashMap(), value)
+
+    /** Tekilleştirme kimliğiyle olay; kimlik biçimi geçersizse yerel SDK kendi kimliğini üretir. */
+    fun sendEventWithId(name: String, properties: ReadableMap, value: Double?, eventId: String) =
+        Pushizo.Session.sendEvent(name, properties.toHashMap(), value, eventId)
 
     // --- In-app ---
 
@@ -558,6 +578,20 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
     fun chatGetVisitorId(promise: Promise) = promise.resolve(Pushizo.Chat.visitorId)
 
     fun chatIsListening(promise: Promise) = promise.resolve(Pushizo.Chat.isListening)
+
+    /** Hazır sohbet ekranı ön plandaki Activity'nin görevinde açılır; Activity yoksa uygulama bağlamıyla yeni görevde. */
+    fun chatShow() {
+        try {
+            Pushizo.Chat.show(context.currentActivity ?: context)
+        } catch (e: Exception) {
+            HsLog.w("sohbet ekranı açılamadı", e)
+        }
+    }
+
+    fun chatHide(promise: Promise) = promise.resolve(Pushizo.Chat.hide())
+
+    /** Yerel SDK'da karşılığı yoktur; köprü açık sohbet ekranını Activity yaşam döngüsünden izler. */
+    fun chatIsPresented(promise: Promise) = promise.resolve(PushizoBridge.chatPresented)
 
     // --- Hata ayıklama ---
 

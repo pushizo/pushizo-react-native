@@ -332,6 +332,33 @@ export interface PlacementListOptions {
   limit?: number;
 }
 
+/**
+ * `Pushizo.User.setProperty` değeri: metin, sonlu sayı, mantıksal ya da bunların dizisi/düz nesnesi. Özelliği silmek
+ * için değer olarak `null` verilir (iç içe `null` desteklenmez).
+ */
+export type UserPropertyValue = string | number | boolean | UserPropertyValue[] | { [key: string]: UserPropertyValue };
+
+/**
+ * `Pushizo.Inbox.addObserver` olayı (yerel `HsInboxChangeEvent` / `HSInboxChangeEvent`, Web SDK ile aynı). `listed` ve
+ * `count` yalnızca okunmamış sayısı değiştiğinde, `read` / `read_all` / `archived` her işlemde bildirilir.
+ */
+export interface InboxChangeEvent {
+  type: 'listed' | 'read' | 'read_all' | 'archived' | 'count';
+  /** Yalnızca tek öğe olaylarında (`read`, `archived`) bulunur. */
+  itemId?: string;
+  /** Güncel okunmamış sayısı. */
+  unreadCount: number;
+}
+
+/** `Pushizo.Session.sendEvent` seçenekleri. */
+export interface SendEventOptions {
+  /**
+   * Tekilleştirme kimliği (ADR-0038): reklam pikseli / Conversions API ile aynı kimlik verilirse sunucu olayı bir kez
+   * sayar. Biçim: 8-64 karakter; harf, rakam ve `. _ : -`. Geçersiz biçimde SDK kendi kimliğini üretir.
+   */
+  eventId?: string;
+}
+
 /** Yerel olay adları (NativeEventEmitter). Yerel köprülerdeki sabitlerle aynı olmalıdır. */
 export const NativeEvents = {
   Click: 'Pushizo-notificationClick',
@@ -340,6 +367,8 @@ export const NativeEvents = {
   PushSubscriptionChange: 'Pushizo-pushSubscriptionChange',
   InAppClick: 'Pushizo-inAppClick',
   InAppLifecycle: 'Pushizo-inAppLifecycle',
+  FeatureFlagsChange: 'Pushizo-featureFlagsChange',
+  InboxChange: 'Pushizo-inboxChange',
 } as const;
 export type NativeEventName = (typeof NativeEvents)[keyof typeof NativeEvents];
 

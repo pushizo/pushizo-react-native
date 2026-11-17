@@ -1,19 +1,27 @@
 package com.pushizo.reactnative
 
+import android.app.Activity
+import android.app.Application
 import android.content.Context
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import com.pushizo.sdk.Pushizo
+import com.pushizo.sdk.HsChatActivity
 import com.pushizo.sdk.HsChatEventAdapter
 import com.pushizo.sdk.HsChatOpenListener
 import com.pushizo.sdk.HsClickEvent
+import com.pushizo.sdk.HsFeatureFlagObserver
 import com.pushizo.sdk.HsForegroundEvent
 import com.pushizo.sdk.HsInAppClickEvent
 import com.pushizo.sdk.HsInAppLifecycleEvent
 import com.pushizo.sdk.HsInAppLifecycleListener
+import com.pushizo.sdk.HsInboxObserver
 import com.pushizo.sdk.HsLog
 import com.pushizo.sdk.HsPushSubscriptionState
+import java.util.Collections
 import java.util.UUID
+import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -31,6 +39,8 @@ object PushizoBridge {
     const val EVENT_IN_APP_LIFECYCLE = "Pushizo-inAppLifecycle"
     const val EVENT_CHAT = "Pushizo-chatEvent"
     const val EVENT_CHAT_OPEN = "Pushizo-chatOpen"
+    const val EVENT_FEATURE_FLAGS = "Pushizo-featureFlagsChange"
+    const val EVENT_INBOX = "Pushizo-inboxChange"
 
     /** iOS ile aynı: ertelenmiş ön plan kararı için bekleme süresi. */
     private const val FOREGROUND_TIMEOUT_MS = 25_000L
@@ -63,10 +73,10 @@ object PushizoBridge {
      */
     fun initialize(context: Context, appId: String, options: Pushizo.Options) {
         Pushizo.initialize(context.applicationContext, appId, options)
-        registerListeners()
+        registerListeners(context.applicationContext)
     }
 
-    private fun registerListeners() {
+    private fun registerListeners(appContext: Context) {
         synchronized(lock) {
             if (listenersRegistered) return
             listenersRegistered = true
@@ -79,6 +89,9 @@ object PushizoBridge {
         Pushizo.InAppMessages.addLifecycleListener(inAppLifecycleListener)
         Pushizo.Chat.addListener(chatListener)
         Pushizo.Chat.addOpenListener(chatOpenListener)
+        Pushizo.FeatureFlags.addObserver(featureFlagObserver)
+        Pushizo.Inbox.addObserver(inboxObserver)
+        (appContext as? Application)?.registerActivityLifecycleCallbacks(chatScreenTracker)
         val state = Pushizo.User.pushSubscription.state
         synchronized(lock) { lastState = state.toMap() }
     }
@@ -189,6 +202,38 @@ object PushizoBridge {
                 pendingChatOpens.add(payload)
             }
         }
+    }
+
+    /** Bayrak değerleri sunucudan yenilendi (ana iş parçacığı); olay yük taşımaz, JS güncel değeri okur. */
+    private val featureFlagObserver = HsFeatureFlagObserver { emit(EVENT_FEATURE_FLAGS, emptyMap()) }
+
+    /** Kutu değişimi: `{ type, itemId, unreadCount }` (ana iş parçacığı). */
+    private val inboxObserver = HsInboxObserver { event -> emit(EVENT_INBOX, event.toMap()) }
+
+    /**
+     * Yerel SDK hazır sohbet ekranının açık olup olmadığını sunmaz (`PushizoChat.hide` yalnızca kapatır); açık
+     * [HsChatActivity] örnekleri burada Activity yaşam döngüsünden izlenir (zayıf başvuru, sızıntı yok).
+     */
+    private val chatScreens: MutableSet<Activity> = Collections.synchronizedSet(Collections.newSetFromMap(WeakHashMap()))
+
+    /** `Pushizo.Chat.show` ile açılan sohbet ekranı şu an açık mı (kapanmakta olan ekran sayılmaz). */
+    val chatPresented: Boolean
+        get() = synchronized(chatScreens) { chatScreens.any { !it.isFinishing && !it.isDestroyed } }
+
+    private val chatScreenTracker = object : Application.ActivityLifecycleCallbacks {
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+            if (activity is HsChatActivity) chatScreens.add(activity)
+        }
+
+        override fun onActivityDestroyed(activity: Activity) {
+            chatScreens.remove(activity)
+        }
+
+        override fun onActivityStarted(activity: Activity) = Unit
+        override fun onActivityResumed(activity: Activity) = Unit
+        override fun onActivityPaused(activity: Activity) = Unit
+        override fun onActivityStopped(activity: Activity) = Unit
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
     }
 
     private val inAppLifecycleListener = object : HsInAppLifecycleListener {

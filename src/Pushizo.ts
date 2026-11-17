@@ -7,6 +7,7 @@ import {
   toContentCard,
   toContentCardFeed,
   toDeliveryStatus,
+  toInboxChangeEvent,
   toInboxItem,
   toInboxPage,
   toNotification,
@@ -28,6 +29,7 @@ import {
   type DeliverySetting,
   DeliverySettings,
   type DeliveryStatus,
+  type InboxChangeEvent,
   type InboxItem,
   type InboxListOptions,
   type InboxPage,
@@ -44,9 +46,11 @@ import {
   PreferenceChannels,
   type PreferenceInput,
   type PushSubscriptionChangedState,
+  type SendEventOptions,
   type UserConsent,
   type UserPreferences,
   type UserProfile,
+  type UserPropertyValue,
 } from './types';
 
 const LOG_LEVELS: readonly string[] = Object.values(LogLevel);
@@ -85,6 +89,33 @@ function requireUserProfile(value: unknown): Record<string, unknown> {
   if (tags !== undefined && tags !== null) out.tags = requireStringMap(tags, 'profile.tags');
   if (aliases !== undefined && aliases !== null) out.aliases = requireStringMap(aliases, 'profile.aliases');
   return out;
+}
+
+const MAX_PROPERTY_KEY_LENGTH = 64;
+
+/** Kullanıcı özelliği anahtarı: boş olmayan, en çok 64 karakter (yerel iOS SDK ile aynı sınır). */
+function requirePropertyKey(value: unknown): string {
+  if (typeof value !== 'string' || value.trim() === '' || value.trim().length > MAX_PROPERTY_KEY_LENGTH) {
+    throw new TypeError(`Pushizo: key 1-${MAX_PROPERTY_KEY_LENGTH} karakterlik bir metin olmalı.`);
+  }
+  return value;
+}
+
+/**
+ * Kullanıcı özelliği değeri: metin, sonlu sayı, mantıksal ya da bunların dizisi/düz nesnesi. İç içe `null`, fonksiyon,
+ * `Date` gibi değerler yerel SDK'larda farklı ele alındığından (iOS yok sayar) çağrıdan önce reddedilir.
+ */
+function requirePropertyValue(value: unknown, name: string): UserPropertyValue {
+  if (typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (Array.isArray(value)) return value.map((item: unknown, index) => requirePropertyValue(item, `${name}[${index}]`));
+  const proto: unknown = value !== null && typeof value === 'object' ? Object.getPrototypeOf(value) : undefined;
+  if (proto === Object.prototype || proto === null) {
+    const out: Record<string, UserPropertyValue> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) out[key] = requirePropertyValue(item, `${name}.${key}`);
+    return out;
+  }
+  throw new TypeError(`Pushizo: ${name} metin, sonlu sayı, mantıksal değer, dizi veya düz nesne olmalı.`);
 }
 
 const MAX_PREFERENCES = 100;
@@ -283,6 +314,11 @@ const inAppLifecycleHub = new EventHub<InAppLifecyclePayload, InAppLifecyclePayl
     }
   },
 });
+/** Özellik bayrağı değerleri sunucudan yenilendi (yük taşımaz). */
+const featureFlagsHub = new EventHub<unknown, void>(NativeEvents.FeatureFlagsChange, () => undefined);
+
+const inboxHub = new EventHub<RawMap, InboxChangeEvent>(NativeEvents.InboxChange, toInboxChangeEvent);
+
 /** İzin önbelleği için izin olayı bir kez (initialize'da) içeride dinlenir. */
 let permissionRetained = false;
 
@@ -445,6 +481,16 @@ const User = {
   registerAdm(token: string): Promise<void> {
     return nativeModule().registerAdm(requireNonEmpty(token, 'token'));
   },
+  /**
+   * Kullanıcı özelliği yazar (ör. `setProperty('plan', 'pro')`); `null` özelliği siler. Değer metin, sonlu sayı,
+   * mantıksal ya da bunların dizisi/düz nesnesi olabilir; anahtar 1-64 karakterdir. Çevrimdışıyken yerel SDK kuyruğunda
+   * bekler. Geçersiz anahtar/değer çağrıdan önce `TypeError`, yerel doğrulamada `INVALID_ARGUMENT` ile reddedilir.
+   */
+  setProperty(key: string, value: UserPropertyValue | null): Promise<void> {
+    const name = requirePropertyKey(key);
+    const property = value === null || value === undefined ? null : requirePropertyValue(value, 'value');
+    return nativeModule().setUserProperty(name, { value: property });
+  },
 };
 
 /**
@@ -458,6 +504,14 @@ const Ads = {
     nativeModule().setAdvertisingId(typeof id === 'string' && id.trim() !== '' ? id : null);
   },
 };
+
+/** Rozet çağrısının sonucu beklenmeyebilir (eski `void` kullanım); bu yüzden Promise hiçbir zaman reddedilmez. */
+function applyBadgeCount(count: number): Promise<boolean> {
+  return Promise.resolve(nativeModule().setBadgeCount(count)).then(
+    (shown) => shown === true,
+    () => false,
+  );
+}
 
 const Notifications = {
   /** Sistem bildirim iznini ister; sonuç izin verildi mi. */
@@ -495,16 +549,23 @@ const Notifications = {
     return nativeModule().removeGroupedNotifications(requireNonEmpty(group, 'group'));
   },
   /**
-   * Uygulama rozetini ayarlar (yalnızca iOS; bildirim servis uzantısıyla paylaşılan sayaç da eşitlenir). Android'de
-   * rozet görünen bildirimlerden hesaplandığı için çağrı etkisizdir.
+   * Uygulama rozetini ayarlar. iOS: rozet ve bildirim servis uzantısıyla paylaşılan sayaç ayarlanır; sonuç `true`.
+   * Android: başlatıcı rozeti için standart bir "sayıyı ayarla" API'si olmadığından yerel SDK sayıyı saklar ve bundan
+   * sonra gösterdiği bildirimlere yazar; sonuç, rozet bu cihazda gösterilebiliyorsa `true` (Android 8 öncesinde,
+   * bildirimler kapalıyken, kanal rozeti kapatıldıysa ya da SDK başlatılmadıysa `false`). Sonucu beklemek zorunlu değildir.
    */
-  setBadgeCount(count: number): void {
+  setBadgeCount(count: number): Promise<boolean> {
     if (!Number.isInteger(count) || count < 0) throw new RangeError('Pushizo: count negatif olmayan tam sayı olmalı.');
-    nativeModule().setBadgeCount(count);
+    return applyBadgeCount(count);
   },
-  /** Rozeti sıfırlar (yalnızca iOS; Android'de etkisiz). */
-  clearBadge(): void {
-    nativeModule().setBadgeCount(0);
+  /** Rozeti sıfırlar (`setBadgeCount(0)`); Android'de tepsideki bildirimleri kaldırmak için `clearAll`. */
+  clearBadge(): Promise<boolean> {
+    return applyBadgeCount(0);
+  },
+  /** Android: `setBadgeCount` ile saklanan son sayı; iOS: uygulama simgesindeki rozet sayısı. */
+  async getBadgeCount(): Promise<number> {
+    const count = await nativeModule().getBadgeCount();
+    return typeof count === 'number' && Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
   },
   addEventListener<K extends keyof NotificationEventMap>(event: K, listener: (e: NotificationEventMap[K]) => void): void {
     const hub = notificationHubs[event] as unknown as EventHub<unknown, NotificationEventMap[K]> | undefined;
@@ -622,6 +683,17 @@ const FeatureFlags = {
     const value = toFeatureFlagValue((await nativeModule().featureFlagsGetValue(requireNonEmpty(key, 'key'))) as RawMap);
     return value === undefined ? defaultValue : (value as T);
   },
+  /**
+   * Bayrak değerleri sunucudan her yenilendiğinde (oturum başı ve `refresh()`) çağrılır; güncel değerler `isEnabled` /
+   * `getValue` ile okunur. Dönen fonksiyon gözlemciyi kaldırır.
+   */
+  addObserver(listener: () => void): () => void {
+    featureFlagsHub.add(listener);
+    return () => featureFlagsHub.remove(listener);
+  },
+  removeObserver(listener: () => void): void {
+    featureFlagsHub.remove(listener);
+  },
 };
 
 const Inbox = {
@@ -645,6 +717,17 @@ const Inbox = {
   },
   unreadCount(): Promise<number> {
     return nativeModule().inboxUnreadCount();
+  },
+  /**
+   * Kutu değişim gözlemcisi (rozet güncellemek için): `listed` / `count` yalnızca okunmamış sayısı değiştiğinde,
+   * `read` / `read_all` / `archived` her işlemde bildirilir. Dönen fonksiyon gözlemciyi kaldırır.
+   */
+  addObserver(listener: (event: InboxChangeEvent) => void): () => void {
+    inboxHub.add(listener);
+    return () => inboxHub.remove(listener);
+  },
+  removeObserver(listener: (event: InboxChangeEvent) => void): void {
+    inboxHub.remove(listener);
   },
 };
 
@@ -670,11 +753,23 @@ const ContentCards = {
 };
 
 const Session = {
-  /** Özel olay / outcome; adı in-app `event` tetiklerini de çalıştırır. */
-  sendEvent(name: string, properties: Record<string, unknown> = {}, value?: number): void {
+  /**
+   * Özel olay / outcome; adı in-app `event` tetiklerini de çalıştırır. `options.eventId` tekilleştirme kimliğidir
+   * (8-64 karakter; harf, rakam ve `. _ : -`): reklam pikseliyle aynı kimlik verilirse sunucu olayı bir kez sayar.
+   * Biçimi geçersiz kimlikte yerel SDK kendi kimliğini üretir.
+   */
+  sendEvent(name: string, properties: Record<string, unknown> = {}, value?: number, options?: SendEventOptions): void {
     requireNonEmpty(name, 'name');
-    if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value))) {
+    if (value !== undefined && value !== null && (typeof value !== 'number' || !Number.isFinite(value))) {
       throw new TypeError('Pushizo: value sonlu bir sayı olmalı.');
+    }
+    const eventId: unknown = options?.eventId;
+    if (eventId !== undefined && eventId !== null && typeof eventId !== 'string') {
+      throw new TypeError('Pushizo: eventId metin olmalı.');
+    }
+    if (typeof eventId === 'string' && eventId !== '') {
+      nativeModule().sendEventWithId(name, properties ?? {}, value ?? null, eventId);
+      return;
     }
     nativeModule().sendEvent(name, properties ?? {}, value ?? null);
   },

@@ -14,6 +14,7 @@ import type {
   InAppLayout,
   InAppMessage,
   InAppTrigger,
+  InboxChangeEvent,
   ContentCard,
   ContentCardFeed,
   ContentCardType,
@@ -177,6 +178,17 @@ export function toInboxPage(raw: RawMap): InboxPage {
 
 const isMap = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const INBOX_CHANGE_TYPES: readonly InboxChangeEvent['type'][] = ['listed', 'read', 'read_all', 'archived', 'count'];
+
+/** Yerel kutu değişim olayı; tanınmayan tür `count` sayılır, `itemId` yalnızca metin geldiyse eklenir. */
+export function toInboxChangeEvent(raw: RawMap): InboxChangeEvent {
+  const m = raw ?? {};
+  const type = INBOX_CHANGE_TYPES.find((t) => t === m.type) ?? 'count';
+  const itemId = str(m.itemId);
+  const unreadCount = Math.max(0, Math.trunc(num(m.unreadCount) ?? 0));
+  return itemId === null ? { type, unreadCount } : { type, itemId, unreadCount };
+}
 
 /** Kategorisiz kayıt için `null` (yerel SDK ayrıştırıcısıyla aynı: geçersiz kayıt atlanır); boş kanal = tüm kanallar. */
 export function toUserPreference(raw: RawMap): UserPreference | null {

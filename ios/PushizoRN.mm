@@ -254,6 +254,14 @@ RCT_EXPORT_METHOD(registerAdm:(NSString *)token
   resolve(nil);
 }
 
+RCT_EXPORT_METHOD(setUserProperty:(NSString *)key
+                  property:(NSDictionary *)property
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] setUserProperty:key property:property resolve:resolve reject:reject];
+}
+
 #pragma mark - Reklam kimliği
 
 RCT_EXPORT_METHOD(setAdvertisingId:(NSString *_Nullable)advertisingId)
@@ -295,9 +303,18 @@ RCT_EXPORT_METHOD(clearAll)
   [[PushizoRNBridge shared] clearAll];
 }
 
-RCT_EXPORT_METHOD(setBadgeCount:(double)count)
+// iOS'ta rozet her zaman ayarlanır; sonuç YES (Android'de "rozet bu cihazda gösterilebiliyor mu").
+RCT_EXPORT_METHOD(setBadgeCount:(double)count
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
 {
   [[PushizoRNBridge shared] setBadgeCount:(NSInteger)count];
+  resolve(@YES);
+}
+
+RCT_EXPORT_METHOD(getBadgeCount:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] getBadgeCount:resolve];
 }
 
 RCT_EXPORT_METHOD(removeNotification:(NSString *)identifier
@@ -334,6 +351,14 @@ RCT_EXPORT_METHOD(preventDefault:(NSString *)notificationId)
 RCT_EXPORT_METHOD(sendEvent:(NSString *)name properties:(NSDictionary *)properties value:(NSNumber *)value)
 {
   [[PushizoRNBridge shared] sendEvent:name properties:properties value:value];
+}
+
+RCT_EXPORT_METHOD(sendEventWithId:(NSString *)name
+                  properties:(NSDictionary *)properties
+                  value:(NSNumber *)value
+                  eventId:(NSString *)eventId)
+{
+  [[PushizoRNBridge shared] sendEventWithId:name properties:properties value:value eventId:eventId];
 }
 
 #pragma mark - In-app
@@ -543,6 +568,21 @@ RCT_EXPORT_METHOD(chatGetVisitorId:(RCTPromiseResolveBlock)resolve reject:(RCTPr
 RCT_EXPORT_METHOD(chatIsListening:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 {
   resolve(@([[PushizoRNBridge shared] chatIsListening]));
+}
+
+RCT_EXPORT_METHOD(chatShow)
+{
+  [[PushizoRNBridge shared] chatShow];
+}
+
+RCT_EXPORT_METHOD(chatHide:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatHide:resolve];
+}
+
+RCT_EXPORT_METHOD(chatIsPresented:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatIsPresented:resolve];
 }
 
 #pragma mark - Live Activities

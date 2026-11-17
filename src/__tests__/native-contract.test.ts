@@ -157,7 +157,7 @@ describe('yerel sözleşme', () => {
     expect(swift).toContain('resolve(Pushizo.Location.isGeofencingEnabled)');
   });
 
-  test('Konum izin durumu ve arka plan izni: Android yerel özellikler ve köprü akışı, iOS CLLocationManager ve requestAlwaysPermission', () => {
+  test('Konum izin durumu ve arka plan izni: Android ve iOS yerel özellikleri, Android köprü akışı, iOS requestAlwaysPermission', () => {
     expect(methods).toEqual(
       expect.arrayContaining(['locationPermissionGranted', 'locationBackgroundPermissionGranted', 'requestBackgroundLocationPermission']),
     );
@@ -180,8 +180,13 @@ describe('yerel sözleşme', () => {
     expect(mm).toContain('resolve(@([[PushizoRNBridge shared] locationBackgroundPermissionGranted]));');
     expect(mm).toContain('[[PushizoRNBridge shared] requestBackgroundLocationPermission:resolve];');
     const swift = read('ios/PushizoRNBridge.swift');
-    expect(swift).toContain('return status == .authorizedWhenInUse || status == .authorizedAlways');
-    expect(swift).toContain('Self.locationAuthorizationStatus() == .authorizedAlways');
+    // iOS: izin durumu yerel SDK'dan okunur; köprünün kendi CLLocationManager uygulaması kaldırıldı.
+    expect(swift).toContain('@objc public func locationPermissionGranted() -> Bool { Pushizo.Location.permissionGranted }');
+    expect(swift).toContain(
+      '@objc public func locationBackgroundPermissionGranted() -> Bool { Pushizo.Location.backgroundPermissionGranted }',
+    );
+    expect(swift).not.toContain('CLLocationManager');
+    expect(swift).not.toContain('import CoreLocation');
     expect(swift).toContain('Pushizo.Location.requestAlwaysPermission { granted in resolve(granted) }');
   });
 
@@ -189,7 +194,7 @@ describe('yerel sözleşme', () => {
     expect(methods).toEqual(
       expect.arrayContaining([
         'isInitialized', 'loginWithProfile', 'setAdsPersonalizationConsent', 'getConsents', 'registerAdm', 'setAdvertisingId',
-        'setBadgeCount', 'chatIsListening',
+        'setBadgeCount', 'getBadgeCount', 'chatIsListening',
       ]),
     );
     const impl = read('android/src/main/java/com/pushizo/reactnative/PushizoModuleImpl.kt');
@@ -199,8 +204,10 @@ describe('yerel sözleşme', () => {
     expect(impl).toContain('Pushizo.User.getConsents(reply(promise) { consents -> Arguments.makeNativeArray(consents.map { it.toMap() }) })');
     expect(impl).toContain('Pushizo.User.registerAdm(token)');
     expect(impl).toContain('fun setAdvertisingId(id: String?) = Pushizo.Ads.setAdvertisingId(id)');
-    // Android'de rozet sayacı yok: çağrı etkisiz, istisna yok.
-    expect(impl).toContain('fun setBadgeCount(count: Double) = Unit');
+    // Android rozeti yerel SDK'ya bağlı: sayı saklanır, sonuç "rozet gösterilebiliyor mu".
+    expect(impl).toContain('promise.resolve(Pushizo.Notifications.setBadgeCount(count.toInt()))');
+    expect(impl).toContain('fun getBadgeCount(promise: Promise) = promise.resolve(Pushizo.Notifications.badgeCount)');
+    expect(impl).not.toContain('fun setBadgeCount(count: Double) = Unit');
     expect(impl).toContain('fun chatIsListening(promise: Promise) = promise.resolve(Pushizo.Chat.isListening)');
     const mappers = read('android/src/main/java/com/pushizo/reactnative/PushizoMappers.kt');
     expect(mappers).toContain('internal fun ReadableMap.toUserProfile(): HsUserProfile = HsUserProfile(');
@@ -215,22 +222,39 @@ describe('yerel sözleşme', () => {
     expect(mm).toContain('[[PushizoRNBridge shared] setAdsPersonalizationConsent:granted resolve:resolve reject:reject]');
     expect(mm).toContain('[[PushizoRNBridge shared] getConsents:resolve reject:reject]');
     expect(mm).toContain('[[PushizoRNBridge shared] setAdvertisingId:advertisingId]');
-    expect(mm).toContain('[[PushizoRNBridge shared] setBadgeCount:(NSInteger)count]');
+    // iOS rozeti her zaman ayarlanır: sonuç YES.
+    expect(mm).toMatch(/\[\[PushizoRNBridge shared\] setBadgeCount:\(NSInteger\)count\];\s+resolve\(@YES\);/);
+    expect(mm).toContain('[[PushizoRNBridge shared] getBadgeCount:resolve];');
     expect(mm).toContain('resolve(@([[PushizoRNBridge shared] chatIsListening]));');
     // ADM yalnızca Android: iOS etkisiz biçimde çözülür.
     expect(mm).toMatch(/RCT_EXPORT_METHOD\(registerAdm:[^{]*\{\s+resolve\(nil\);/);
     const swift = read('ios/PushizoRNBridge.swift');
-    // iOS'ta profil doğrulaması girişten önce yapılır (Android HsUserProfile.validate ile aynı sıra).
+    // iOS'ta profil girişi yerel `login(_:profile:identityHash:jwt:)` çağrısıdır; köprünün kendi profil uygulaması kaldırıldı.
     const login = swift.slice(swift.indexOf('func loginWithProfile'), swift.indexOf('func updateUserJwt'));
-    expect(login.indexOf('HSContacts.normalizeEmail(email) == nil')).toBeGreaterThan(-1);
-    expect(login.indexOf('HSContacts.normalizePhone(sms) == nil')).toBeLessThan(login.indexOf('Pushizo.login(externalId'));
-    expect(login.indexOf('Pushizo.login(externalId')).toBeLessThan(login.indexOf('Pushizo.User.addEmail(email)'));
-    for (const call of ['Pushizo.User.addSms(sms)', 'Pushizo.User.addTags(tags)', 'Pushizo.User.addAliases(aliases)']) expect(login).toContain(call);
+    expect(login).toContain('let userProfile = HSUserProfile(');
+    expect(login).toContain('try Pushizo.login(externalId, profile: userProfile, identityHash: identityHash, jwt: jwt)');
+    for (const call of ['Pushizo.User.addEmail', 'Pushizo.User.addSms', 'Pushizo.User.addTags', 'Pushizo.User.addAliases']) {
+      expect([call, login.includes(call)]).toEqual([call, false]);
+    }
+    // Hata kodları değişmedi: başlatılmamış SDK ve kanıt hatası NOT_READY, geçersiz profil INVALID_ARGUMENT (girişten önce).
+    expect(login).toContain('guard Pushizo.isInitialized else { reject("NOT_READY", "Pushizo.initialize önce çağrılmalı", nil); return }');
+    expect(login).toContain('if let message = userProfile.validationError { reject("INVALID_ARGUMENT", message, nil); return }');
+    expect(login).toContain(
+      'if let message = Pushizo.loginProofError(identityHash: identityHash, jwt: jwt) { reject("NOT_READY", message, nil); return }',
+    );
+    expect(login.indexOf('userProfile.validationError')).toBeLessThan(login.indexOf('Pushizo.loginProofError'));
+    expect(login.indexOf('Pushizo.loginProofError')).toBeLessThan(login.indexOf('try Pushizo.login(externalId, profile:'));
+    expect(login).toMatch(/catch HSError\.invalidArgument\(let message\) \{\s+reject\("INVALID_ARGUMENT", message, nil\)/);
+    // Yerel profil hata metinleri köprünün önceki metinleriyle aynıdır.
+    const profileSource = readFileSync(join(root, '..', 'ios', 'Sources', 'PushizoCore', 'HSUserProfile.swift'), 'utf8');
+    expect(profileSource).toContain('return "Geçersiz e-posta adresi"');
+    expect(profileSource).toContain('return "Geçersiz telefon numarası"');
     expect(swift).toContain('try await Self.map(Pushizo.User.setAdsPersonalizationConsent(granted))');
     expect(swift).toContain('try await Pushizo.User.getConsents().map { Self.map($0) }');
     expect(swift).toContain('@objc public func setAdvertisingId(_ id: String?) { Pushizo.Ads.setAdvertisingId(id) }');
     expect(swift).toContain('Pushizo.Notifications.setBadgeCount(count)');
     expect(swift).toContain('Pushizo.Notifications.clearBadge()');
+    expect(swift).toContain('onMain { resolve(UIApplication.shared.applicationIconBadgeNumber) }');
     expect(swift).toContain('@objc public func chatIsListening() -> Bool { Pushizo.Chat.isListening }');
     expect(swift).toContain('"consents": r.consents.map { map($0) }');
   });
@@ -338,5 +362,95 @@ describe('yerel sözleşme', () => {
     expect(swift).toContain('registerChatListeners()');
     const mm = read('ios/PushizoRN.mm');
     expect(mm).toContain('[[PushizoRNBridge shared] chatSendMessage:text optionId:optionId resolve:resolve reject:reject];');
+  });
+
+  test('Kullanıcı özelliği: `{ value }` zarfı yerel User.setProperty çağrısına bağlı; geçersiz girdi INVALID_ARGUMENT', () => {
+    expect(methods).toContain('setUserProperty');
+    const impl = read('android/src/main/java/com/pushizo/reactnative/PushizoModuleImpl.kt');
+    // Boş anahtar yerel SDK'dan IllegalArgumentException → guard → INVALID_ARGUMENT.
+    expect(impl).toMatch(
+      /fun setUserProperty\(key: String, property: ReadableMap, promise: Promise\) = guard\(promise\) \{\s+Pushizo\.User\.setProperty\(key, property\.toHashMap\(\)\["value"\]\)\s+promise\.resolve\(null\)/,
+    );
+    expect(impl).toContain('is IllegalArgumentException -> "INVALID_ARGUMENT"');
+
+    const mm = read('ios/PushizoRN.mm');
+    expect(mm).toContain('[[PushizoRNBridge shared] setUserProperty:key property:property resolve:resolve reject:reject];');
+    const swift = read('ios/PushizoRNBridge.swift');
+    const body = swift.slice(swift.indexOf('func setUserProperty'), swift.indexOf('// MARK: - Tercihler'));
+    expect(body).toContain('let value: Any? = raw is NSNull ? nil : raw');
+    // Yerel iOS SDK geçersiz girdiyi yalnızca günlüğe yazar; köprü aynı kuralla (HSUserProperties) reddeder.
+    expect(body).toMatch(/guard HSUserProperties\.operation\(key: key, value: value\) != nil else \{\s+reject\("INVALID_ARGUMENT"/);
+    expect(body).toContain('Pushizo.User.setProperty(key, value)');
+  });
+
+  test('Gözlemciler: FeatureFlags ve Inbox yerel gözlemcileri bir kez kaydedilir, olaylar JS olay adlarıyla yayılır', () => {
+    const types = read('src/types.ts');
+    expect(types).toContain("FeatureFlagsChange: 'Pushizo-featureFlagsChange'");
+    expect(types).toContain("InboxChange: 'Pushizo-inboxChange'");
+
+    const bridge = read('android/src/main/java/com/pushizo/reactnative/PushizoBridge.kt');
+    expect(bridge).toContain('const val EVENT_FEATURE_FLAGS = "Pushizo-featureFlagsChange"');
+    expect(bridge).toContain('const val EVENT_INBOX = "Pushizo-inboxChange"');
+    expect(bridge).toContain('Pushizo.FeatureFlags.addObserver(featureFlagObserver)');
+    expect(bridge).toContain('Pushizo.Inbox.addObserver(inboxObserver)');
+    expect(bridge).toContain('private val featureFlagObserver = HsFeatureFlagObserver { emit(EVENT_FEATURE_FLAGS, emptyMap()) }');
+    expect(bridge).toContain('private val inboxObserver = HsInboxObserver { event -> emit(EVENT_INBOX, event.toMap()) }');
+    // Kayıt, diğer yerel dinleyicilerle aynı tek seferlik blokta yapılır.
+    const register = bridge.slice(bridge.indexOf('private fun registerListeners'), bridge.indexOf('// --- Sink yönetimi ---'));
+    expect(register).toContain('if (listenersRegistered) return');
+    expect(register).toContain('Pushizo.FeatureFlags.addObserver(featureFlagObserver)');
+    expect(register).toContain('Pushizo.Inbox.addObserver(inboxObserver)');
+
+    const swift = read('ios/PushizoRNBridge.swift');
+    expect(swift).toContain('@objc public static let eventFeatureFlags = "Pushizo-featureFlagsChange"');
+    expect(swift).toContain('@objc public static let eventInbox = "Pushizo-inboxChange"');
+    // RCTEventEmitter yalnızca `supportedEvents` içindeki adları gönderir.
+    const supported = swift.slice(swift.indexOf('static var supportedEvents'), swift.indexOf('/// Info.plist anahtarları'));
+    expect(supported).toContain('eventFeatureFlags, eventInbox');
+    expect(swift).toMatch(/Pushizo\.FeatureFlags\.addObserver \{ \[weak self\] in\s+self\?\.emit\(Self\.eventFeatureFlags, \[:\]\)/);
+    expect(swift).toMatch(/Pushizo\.Inbox\.addObserver \{ \[weak self\] event in\s+self\?\.emit\(Self\.eventInbox, event\.dictionary\)/);
+  });
+
+  test('Olay kimliği: sendEventWithId yerel Session.sendEvent eventId aşırı yüklemesine bağlı; eski sendEvent değişmedi', () => {
+    expect(methods).toEqual(expect.arrayContaining(['sendEvent', 'sendEventWithId']));
+    const impl = read('android/src/main/java/com/pushizo/reactnative/PushizoModuleImpl.kt');
+    expect(impl).toMatch(/fun sendEvent\(name: String, properties: ReadableMap, value: Double\?\) =\s+Pushizo\.Session\.sendEvent\(name, properties\.toHashMap\(\), value\)/);
+    expect(impl).toMatch(
+      /fun sendEventWithId\(name: String, properties: ReadableMap, value: Double\?, eventId: String\) =\s+Pushizo\.Session\.sendEvent\(name, properties\.toHashMap\(\), value, eventId\)/,
+    );
+    // Eski mimaride boş geçilebilir sayı `Dynamic` olarak gelir.
+    const oldArch = read('android/src/oldarch/java/com/pushizo/reactnative/PushizoModule.kt');
+    expect(oldArch).toContain('impl.sendEventWithId(name, properties, value.numberOrNull(), eventId)');
+
+    const mm = read('ios/PushizoRN.mm');
+    expect(mm).toContain('[[PushizoRNBridge shared] sendEventWithId:name properties:properties value:value eventId:eventId];');
+    const swift = read('ios/PushizoRNBridge.swift');
+    expect(swift).toContain('Pushizo.Session.sendEvent(name, properties: properties, value: value?.doubleValue)');
+    expect(swift).toContain('Pushizo.Session.sendEvent(name, properties: properties, value: value?.doubleValue, eventId: eventId)');
+  });
+
+  test('Hazır sohbet ekranı: show/hide yerel Chat çağrılarına bağlı; Android açık ekranı köprü izler', () => {
+    expect(methods).toEqual(expect.arrayContaining(['chatShow', 'chatHide', 'chatIsPresented']));
+    const impl = read('android/src/main/java/com/pushizo/reactnative/PushizoModuleImpl.kt');
+    expect(impl).toContain('Pushizo.Chat.show(context.currentActivity ?: context)');
+    expect(impl).toContain('fun chatHide(promise: Promise) = promise.resolve(Pushizo.Chat.hide())');
+    expect(impl).toContain('fun chatIsPresented(promise: Promise) = promise.resolve(PushizoBridge.chatPresented)');
+    // Yerel Android SDK `isPresented` sunmaz: köprü HsChatActivity örneklerini yaşam döngüsünden izler.
+    const bridge = read('android/src/main/java/com/pushizo/reactnative/PushizoBridge.kt');
+    expect(bridge).toContain('(appContext as? Application)?.registerActivityLifecycleCallbacks(chatScreenTracker)');
+    expect(bridge).toContain('if (activity is HsChatActivity) chatScreens.add(activity)');
+    expect(bridge).toContain('chatScreens.any { !it.isFinishing && !it.isDestroyed }');
+
+    const mm = read('ios/PushizoRN.mm');
+    expect(mm).toContain('[[PushizoRNBridge shared] chatShow];');
+    expect(mm).toContain('[[PushizoRNBridge shared] chatHide:resolve];');
+    expect(mm).toContain('[[PushizoRNBridge shared] chatIsPresented:resolve];');
+    const swift = read('ios/PushizoRNBridge.swift');
+    const show = swift.slice(swift.indexOf('@objc public func chatShow()'), swift.indexOf('@objc public func chatHide'));
+    // SDK başlatılmadıysa ekran açılmaz (Android ile aynı).
+    expect(show.indexOf('guard Pushizo.isInitialized else { return }')).toBeLessThan(show.indexOf('Pushizo.Chat.show()'));
+    expect(show).toContain('Pushizo.Chat.show()');
+    expect(swift).toMatch(/let presented = Pushizo\.Chat\.isPresented\s+Pushizo\.Chat\.hide\(\)\s+resolve\(presented\)/);
+    expect(swift).toContain('onMain { resolve(Pushizo.Chat.isPresented) }');
   });
 });
