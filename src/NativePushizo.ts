@@ -145,6 +145,17 @@ export interface Spec extends TurboModule {
   /** Bölge izleme tercihi (kalıcı; izin durumundan bağımsız). */
   isGeofencingEnabled(): Promise<boolean>;
 
+  // --- Android teslimat güçlendirme (ADR-0092; iOS'ta durum `{ supported: false }`, diğerleri etkisiz `false`) ---
+  /** Sonuç: { supported, manufacturer, brand, vendor, aggressiveVendor, rom, romVersion, notificationsEnabled, channelBlocked, batteryOptimizationExempt, backgroundRestricted, standbyBucket, powerSaveMode, dataSaverEnabled, restricted, risk, recommendedSettings } */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  deliveryStatus(): Promise<Object>;
+  /** Risk var ve hazır diyalog son `minIntervalDays` günde gösterilmedi mi. */
+  deliveryShouldShowGuidance(minIntervalDays: number): Promise<boolean>;
+  /** setting: `auto`, `notifications`, `auto_start`, `battery_optimization`, `app_details`; sonuç: bir ayar ekranı açıldı mı. */
+  deliveryOpenSettings(setting: string): Promise<boolean>;
+  /** Hazır açıklama diyaloğu (message null → SDK'nın yerelleştirilmiş metni); sonuç: kullanıcı kabul etti ve ayar ekranı açıldı mı. */
+  deliveryShowGuidance(setting: string, message: string | null): Promise<boolean>;
+
   // --- Özellik bayrakları (ADR-0066) ---
   /** Değerleri hemen yeniler; sonuç: yenileme başarılı mı. */
   featureFlagsRefresh(): Promise<boolean>;

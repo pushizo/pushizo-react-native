@@ -1,3 +1,9 @@
+import {
+  type DeliveryRisk,
+  type DeliverySetting,
+  DeliverySettings,
+  type DeliveryStatus,
+} from './types';
 import type {
   FeatureFlagValue,
   InAppAction,
@@ -60,6 +66,57 @@ export function toNotification(raw: RawMap): NotificationData {
 export function toSubscriptionState(raw: RawMap): PushSubscriptionState {
   const m = raw ?? {};
   return { id: str(m.id), token: str(m.token), optedIn: m.optedIn === true, permission: m.permission === true };
+}
+
+/** Teşhisin okunamadığı durum (iOS, başlatılmamış SDK): risk yok, öneri yok. */
+const UNSUPPORTED_DELIVERY_STATUS: DeliveryStatus = {
+  supported: false,
+  manufacturer: '',
+  brand: '',
+  vendor: 'other',
+  aggressiveVendor: false,
+  rom: '',
+  romVersion: null,
+  notificationsEnabled: true,
+  channelBlocked: false,
+  batteryOptimizationExempt: true,
+  backgroundRestricted: false,
+  standbyBucket: null,
+  powerSaveMode: false,
+  dataSaverEnabled: false,
+  restricted: false,
+  risk: 'none',
+  recommendedSettings: [],
+};
+
+/** Yerel teslim durumu (ADR-0092); `supported` true değilse desteklenmeyen platform durumu döner. */
+export function toDeliveryStatus(raw: RawMap): DeliveryStatus {
+  const m = raw ?? {};
+  if (m.supported !== true) return { ...UNSUPPORTED_DELIVERY_STATUS, recommendedSettings: [] };
+  const risk: DeliveryRisk = m.risk === 'high' || m.risk === 'elevated' ? m.risk : 'none';
+  // Yerel SDK'nın ileride ekleyeceği, bu sürümün tanımadığı ekran atlanır.
+  const recommendedSettings = toStringArray(m.recommendedSettings).filter(
+    (s): s is DeliverySetting => s !== 'auto' && (DeliverySettings as readonly string[]).includes(s),
+  );
+  return {
+    supported: true,
+    manufacturer: str(m.manufacturer) ?? '',
+    brand: str(m.brand) ?? '',
+    vendor: str(m.vendor) ?? 'other',
+    aggressiveVendor: m.aggressiveVendor === true,
+    rom: str(m.rom) ?? '',
+    romVersion: str(m.romVersion),
+    notificationsEnabled: m.notificationsEnabled !== false,
+    channelBlocked: m.channelBlocked === true,
+    batteryOptimizationExempt: m.batteryOptimizationExempt !== false,
+    backgroundRestricted: m.backgroundRestricted === true,
+    standbyBucket: str(m.standbyBucket),
+    powerSaveMode: m.powerSaveMode === true,
+    dataSaverEnabled: m.dataSaverEnabled === true,
+    restricted: m.restricted === true,
+    risk,
+    recommendedSettings,
+  };
 }
 
 export function toInboxItem(raw: RawMap): InboxItem {

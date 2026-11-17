@@ -159,6 +159,37 @@ describe('yerel sözleşme', () => {
     expect(swift).not.toContain('requestAlwaysPermission');
   });
 
+  test('Android teslimat güçlendirme: yerel Pushizo.Delivery çağrılarına bağlı; iOS zararsız yanıt verir', () => {
+    expect(methods).toEqual(
+      expect.arrayContaining(['deliveryStatus', 'deliveryShouldShowGuidance', 'deliveryOpenSettings', 'deliveryShowGuidance']),
+    );
+    const impl = read('android/src/main/java/com/pushizo/reactnative/PushizoModuleImpl.kt');
+    expect(impl).toContain('Pushizo.Delivery.status()?.toMap() ?: mapOf("supported" to false)');
+    expect(impl).toContain('promise.resolve(Pushizo.Delivery.shouldShowGuidance(minIntervalDays.toInt()))');
+    expect(impl).toContain('promise.resolve(Pushizo.Delivery.openSettings(context.currentActivity ?: context, setting.toDeliverySetting()))');
+    expect(impl).toContain('Pushizo.Delivery.showGuidance(activity, setting.toDeliverySetting(), message) { opened -> promise.resolve(opened) }');
+    // Activity yoksa diyalog gösterilmez; reddetmek yerine false döner.
+    expect(impl).toMatch(/fun deliveryShowGuidance\([^)]*\) \{\s+val activity = context\.currentActivity\s+if \(activity == null\) \{\s+promise\.resolve\(false\)/);
+    // Köprü pil optimizasyonu iznini istemez ve manifest'e eklemez (ADR-0092 §3).
+    expect(impl).not.toContain('REQUEST_IGNORE_BATTERY_OPTIMIZATIONS');
+    expect(read('android/src/main/AndroidManifest.xml')).not.toContain('REQUEST_IGNORE_BATTERY_OPTIMIZATIONS');
+    const mappers = read('android/src/main/java/com/pushizo/reactnative/PushizoMappers.kt');
+    expect(mappers).toContain('internal fun HsDeliveryStatus.toMap(): Map<String, Any?> = mapOf(');
+    // TS `DeliveryStatus` alanlarının tümü yerel haritada bulunur.
+    const types = read('src/types.ts');
+    const fields = [...types.slice(types.indexOf('export interface DeliveryStatus {')).split('\n}')[0].matchAll(/^\s{2}([a-zA-Z]+): /gm)].map((m) => m[1]);
+    expect(fields.length).toBe(17);
+    const map = mappers.slice(mappers.indexOf('internal fun HsDeliveryStatus.toMap()'));
+    for (const field of fields) expect([field, map.includes(`"${field}" to `)]).toEqual([field, true]);
+
+    const mm = read('ios/PushizoRN.mm');
+    expect(mm).toContain('RCT_EXPORT_METHOD(deliveryStatus:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)\n{\n  resolve(@{@"supported": @NO});');
+    for (const method of ['deliveryShouldShowGuidance', 'deliveryOpenSettings', 'deliveryShowGuidance']) {
+      const body = mm.slice(mm.indexOf(`RCT_EXPORT_METHOD(${method}:`));
+      expect([method, body.slice(0, body.indexOf('\n}\n')).trimEnd().endsWith('resolve(@NO);')]).toEqual([method, true]);
+    }
+  });
+
   test('Özellik bayrakları: yerel FeatureFlags yüzeyine bağlı; değer `{ value }` zarfıyla döner', () => {
     expect(methods).toEqual(expect.arrayContaining(['featureFlagsRefresh', 'featureFlagsIsEnabled', 'featureFlagsGetValue']));
     const impl = read('android/src/main/java/com/pushizo/reactnative/PushizoModuleImpl.kt');

@@ -538,6 +538,35 @@ RCT_EXPORT_METHOD(isGeofencingEnabled:(RCTPromiseResolveBlock)resolve reject:(RC
   [[PushizoRNBridge shared] isGeofencingEnabled:resolve];
 }
 
+#pragma mark - Android teslimat güçlendirme (ADR-0092): iOS'ta yoktur; durum "desteklenmiyor", diğerleri etkisiz NO
+
+RCT_EXPORT_METHOD(deliveryStatus:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@{@"supported": @NO});
+}
+
+RCT_EXPORT_METHOD(deliveryShouldShowGuidance:(double)minIntervalDays
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@NO);
+}
+
+RCT_EXPORT_METHOD(deliveryOpenSettings:(NSString *)setting
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@NO);
+}
+
+RCT_EXPORT_METHOD(deliveryShowGuidance:(NSString *)setting
+                  message:(NSString *_Nullable)message
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@NO);
+}
+
 #pragma mark - Özellik bayrakları
 
 RCT_EXPORT_METHOD(featureFlagsRefresh:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)

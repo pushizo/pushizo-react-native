@@ -138,6 +138,15 @@ function createNative(): Record<string, jest.Mock> {
     requestLocationPermission: resolved(true),
     setGeofencingEnabled: jest.fn(),
     isGeofencingEnabled: resolved(false),
+    deliveryStatus: resolved({
+      supported: true, manufacturer: 'xiaomi', brand: 'redmi', vendor: 'xiaomi', aggressiveVendor: true, rom: 'hyperos', romVersion: '1.0.2.0',
+      notificationsEnabled: true, channelBlocked: false, batteryOptimizationExempt: false, backgroundRestricted: false, standbyBucket: 'rare',
+      powerSaveMode: true, dataSaverEnabled: false, restricted: true, risk: 'elevated',
+      recommendedSettings: ['auto_start', 'battery_optimization', 'gelecek_ekran'],
+    }),
+    deliveryShouldShowGuidance: resolved(true),
+    deliveryOpenSettings: resolved(true),
+    deliveryShowGuidance: resolved(true),
     featureFlagsRefresh: resolved(true),
     featureFlagsIsEnabled: resolved(true),
     featureFlagsGetValue: resolved({ value: 'mavi' }),
@@ -320,6 +329,59 @@ describe('Pushizo (React Native)', () => {
       Promise.reject(Object.assign(new Error('İzin istemek için ön planda bir ReactActivity gerekli.'), { code: 'NO_ACTIVITY' })),
     );
     await expect(Pushizo.Location.requestPermission()).rejects.toMatchObject({ code: 'NO_ACTIVITY' });
+  });
+
+  test('Delivery.status: yerel durum modele çevrilir; tanınmayan ayar ekranı atlanır', async () => {
+    const { Pushizo, env } = load();
+    await expect(Pushizo.Delivery.status()).resolves.toEqual({
+      supported: true, manufacturer: 'xiaomi', brand: 'redmi', vendor: 'xiaomi', aggressiveVendor: true, rom: 'hyperos', romVersion: '1.0.2.0',
+      notificationsEnabled: true, channelBlocked: false, batteryOptimizationExempt: false, backgroundRestricted: false, standbyBucket: 'rare',
+      powerSaveMode: true, dataSaverEnabled: false, restricted: true, risk: 'elevated',
+      recommendedSettings: ['auto_start', 'battery_optimization'],
+    });
+    expect(env.native.deliveryStatus).toHaveBeenCalledTimes(1);
+  });
+
+  test('Delivery: iOS ve başlatılmamış SDK için desteklenmiyor / risk yok; çağrılar false döner', async () => {
+    const { Pushizo, env } = load();
+    for (const raw of [{ supported: false }, null, {}]) {
+      env.native.deliveryStatus.mockResolvedValueOnce(raw);
+      const status = await Pushizo.Delivery.status();
+      expect(status).toMatchObject({ supported: false, risk: 'none', restricted: false, vendor: 'other', recommendedSettings: [] });
+    }
+    env.native.deliveryShouldShowGuidance.mockResolvedValueOnce(false);
+    env.native.deliveryOpenSettings.mockResolvedValueOnce(false);
+    env.native.deliveryShowGuidance.mockResolvedValueOnce(null);
+    await expect(Pushizo.Delivery.shouldShowGuidance()).resolves.toBe(false);
+    await expect(Pushizo.Delivery.openSettings()).resolves.toBe(false);
+    await expect(Pushizo.Delivery.showGuidance()).resolves.toBe(false);
+  });
+
+  test('Delivery: argümanlar yerel modüle iletilir, geçersiz değer yerel modüle gitmez', async () => {
+    const { Pushizo, env } = load();
+    await expect(Pushizo.Delivery.shouldShowGuidance()).resolves.toBe(true);
+    await Pushizo.Delivery.shouldShowGuidance(30);
+    expect(env.native.deliveryShouldShowGuidance.mock.calls).toEqual([[14], [30]]);
+    await expect(Pushizo.Delivery.shouldShowGuidance(-1)).rejects.toThrow('minIntervalDays');
+    await expect(Pushizo.Delivery.shouldShowGuidance(1.5)).rejects.toThrow('minIntervalDays');
+
+    await expect(Pushizo.Delivery.openSettings()).resolves.toBe(true);
+    await Pushizo.Delivery.openSettings('auto_start');
+    expect(env.native.deliveryOpenSettings.mock.calls).toEqual([['auto'], ['auto_start']]);
+    await expect(Pushizo.Delivery.openSettings('autoStart' as never)).rejects.toThrow('geçersiz ayar ekranı');
+
+    await expect(Pushizo.Delivery.showGuidance()).resolves.toBe(true);
+    await Pushizo.Delivery.showGuidance({ setting: 'battery_optimization', message: 'Bildirimleri kaçırmayın' });
+    await Pushizo.Delivery.showGuidance({ message: '  ' });
+    expect(env.native.deliveryShowGuidance.mock.calls).toEqual([
+      ['auto', null],
+      ['battery_optimization', 'Bildirimleri kaçırmayın'],
+      ['auto', null],
+    ]);
+    await expect(Pushizo.Delivery.showGuidance({ message: 42 as never })).rejects.toThrow('message');
+    await expect(Pushizo.Delivery.showGuidance({ setting: 'pil' as never })).rejects.toThrow('geçersiz ayar ekranı');
+    expect(env.native.deliveryShowGuidance).toHaveBeenCalledTimes(3);
+    expect(env.native.deliveryOpenSettings).toHaveBeenCalledTimes(2);
   });
 
   test('Location: eski mimaride NativeModules.Pushizo kullanılır', async () => {

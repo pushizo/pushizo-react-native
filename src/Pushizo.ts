@@ -6,6 +6,7 @@ import {
   toInAppMessages,
   toContentCard,
   toContentCardFeed,
+  toDeliveryStatus,
   toInboxItem,
   toInboxPage,
   toNotification,
@@ -22,6 +23,10 @@ import {
   type InAppMessageLifecycleEvent,
   type ContentCard,
   type ContentCardFeed,
+  type DeliveryGuidanceOptions,
+  type DeliverySetting,
+  DeliverySettings,
+  type DeliveryStatus,
   type InboxItem,
   type InboxListOptions,
   type InboxPage,
@@ -687,6 +692,52 @@ const Location = {
   },
 };
 
+function requireDeliverySetting(value: DeliverySetting | null | undefined): DeliverySetting {
+  if (value === undefined || value === null) return 'auto';
+  if (!DeliverySettings.includes(value)) throw new TypeError(`Pushizo: geçersiz ayar ekranı '${String(value)}'.`);
+  return value;
+}
+
+/**
+ * Android teslimat güçlendirme (ADR-0092): bazı üreticilerin pil/otomatik başlatma yöneticisi arka plandaki uygulamayı
+ * durdurduğu için bildirimler gecikir ya da gelmez. Bu API cihazdaki kısıtları okur ve kullanıcıyı ilgili ayar ekranına
+ * götürür. Yalnızca Android'de etkilidir: iOS'ta `status()` `supported: false` ve `risk: 'none'` döner, `openSettings`
+ * ile `showGuidance` hiçbir şey yapmadan `false` döner.
+ */
+const Delivery = {
+  /** Cihazın teslim durumu: üretici, ROM, pil muafiyeti, arka plan kısıtı, risk ve önerilen ayar ekranları. */
+  async status(): Promise<DeliveryStatus> {
+    return toDeliveryStatus((await nativeModule().deliveryStatus()) as RawMap);
+  },
+  /** Hazır açıklama diyaloğu şimdi gösterilmeli mi: teslim riski var ve diyalog son `minIntervalDays` günde gösterilmedi. */
+  async shouldShowGuidance(minIntervalDays = 14): Promise<boolean> {
+    if (!Number.isInteger(minIntervalDays) || minIntervalDays < 0) {
+      throw new RangeError('Pushizo: minIntervalDays negatif olmayan tam sayı olmalı.');
+    }
+    return (await nativeModule().deliveryShouldShowGuidance(minIntervalDays)) === true;
+  },
+  /**
+   * Ayar ekranını açar (`auto`: duruma en uygun ekran). Üreticiye özgü ekran bulunamazsa standart Android ekranına
+   * düşülür. Bir ekran açıldıysa `true`.
+   */
+  async openSettings(setting: DeliverySetting = 'auto'): Promise<boolean> {
+    return (await nativeModule().deliveryOpenSettings(requireDeliverySetting(setting))) === true;
+  },
+  /**
+   * Hazır açıklama diyaloğunu gösterir (22 dil; `message` verilirse SDK metni yerine o gösterilir). Kullanıcı kabul
+   * ederse `setting` ekranı açılır. Ayar ekranı açıldıysa `true`; kullanıcı vazgeçtiyse, ekran açılamadıysa ya da ön
+   * planda Activity yoksa `false`. SDK diyaloğu kendiliğinden göstermez; uygun anı uygulama seçer (`shouldShowGuidance`).
+   */
+  async showGuidance(options: DeliveryGuidanceOptions = {}): Promise<boolean> {
+    const message = options.message;
+    if (message !== undefined && message !== null && typeof message !== 'string') {
+      throw new TypeError('Pushizo: message metin olmalı.');
+    }
+    const text = typeof message === 'string' && message.trim() !== '' ? message : null;
+    return (await nativeModule().deliveryShowGuidance(requireDeliverySetting(options.setting), text)) === true;
+  },
+};
+
 const Debug = {
   setLogLevel(level: LogLevel): void {
     if (!LOG_LEVELS.includes(level)) throw new TypeError(`Pushizo: geçersiz günlük seviyesi '${String(level)}'.`);
@@ -765,5 +816,7 @@ export const Pushizo = {
   Session,
   LiveActivities,
   Location,
+  /** Android teslimat güçlendirme (ADR-0092). */
+  Delivery,
   Debug,
 };

@@ -372,6 +372,26 @@ class PushizoModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
     }
 
     @ReactMethod
+    fun deliveryStatus(promise: Promise) {
+        impl.deliveryStatus(promise)
+    }
+
+    @ReactMethod
+    fun deliveryShouldShowGuidance(minIntervalDays: Double, promise: Promise) {
+        impl.deliveryShouldShowGuidance(minIntervalDays, promise)
+    }
+
+    @ReactMethod
+    fun deliveryOpenSettings(setting: String, promise: Promise) {
+        impl.deliveryOpenSettings(setting, promise)
+    }
+
+    @ReactMethod
+    fun deliveryShowGuidance(setting: String, message: String?, promise: Promise) {
+        impl.deliveryShowGuidance(setting, message, promise)
+    }
+
+    @ReactMethod
     fun featureFlagsRefresh(promise: Promise) {
         impl.featureFlagsRefresh(promise)
     }

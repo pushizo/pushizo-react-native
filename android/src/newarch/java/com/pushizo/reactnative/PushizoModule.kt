@@ -296,6 +296,22 @@ class PushizoModule(reactContext: ReactApplicationContext) : NativePushizoSpec(r
         impl.isGeofencingEnabled(promise)
     }
 
+    override fun deliveryStatus(promise: Promise) {
+        impl.deliveryStatus(promise)
+    }
+
+    override fun deliveryShouldShowGuidance(minIntervalDays: Double, promise: Promise) {
+        impl.deliveryShouldShowGuidance(minIntervalDays, promise)
+    }
+
+    override fun deliveryOpenSettings(setting: String, promise: Promise) {
+        impl.deliveryOpenSettings(setting, promise)
+    }
+
+    override fun deliveryShowGuidance(setting: String, message: String?, promise: Promise) {
+        impl.deliveryShowGuidance(setting, message, promise)
+    }
+
     override fun featureFlagsRefresh(promise: Promise) {
         impl.featureFlagsRefresh(promise)
     }

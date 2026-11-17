@@ -12,6 +12,7 @@ import com.pushizo.sdk.HsInAppMessage
 import com.pushizo.sdk.HsInAppTrigger
 import com.pushizo.sdk.HsContentCard
 import com.pushizo.sdk.HsContentCardFeed
+import com.pushizo.sdk.HsDeliveryStatus
 import com.pushizo.sdk.HsInboxItem
 import com.pushizo.sdk.HsInboxPage
 import com.pushizo.sdk.HsLog
@@ -38,6 +39,27 @@ internal fun HsNotification.toMap(): Map<String, Any?> = mapOf(
 
 internal fun HsPushSubscriptionState.toMap(): Map<String, Any?> =
     mapOf("id" to id, "token" to token, "optedIn" to optedIn, "permission" to permission)
+
+/** Teslim durumu (ADR-0092); enum değerleri küçük harfle (`risk`: none/elevated/high, ayarlar: `auto_start` …). */
+internal fun HsDeliveryStatus.toMap(): Map<String, Any?> = mapOf(
+    "supported" to true,
+    "manufacturer" to manufacturer,
+    "brand" to brand,
+    "vendor" to vendor.id,
+    "aggressiveVendor" to vendor.aggressive,
+    "rom" to rom,
+    "romVersion" to romVersion,
+    "notificationsEnabled" to notificationsEnabled,
+    "channelBlocked" to channelBlocked,
+    "batteryOptimizationExempt" to batteryOptimizationExempt,
+    "backgroundRestricted" to backgroundRestricted,
+    "standbyBucket" to standbyBucket?.id,
+    "powerSaveMode" to powerSaveMode,
+    "dataSaverEnabled" to dataSaverEnabled,
+    "restricted" to restricted,
+    "risk" to risk.name.lowercase(),
+    "recommendedSettings" to recommendedSettings.map { it.name.lowercase() },
+)
 
 internal fun HsInboxItem.toMap(): Map<String, Any?> = mapOf(
     "id" to id,

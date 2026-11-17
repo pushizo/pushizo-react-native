@@ -17,6 +17,7 @@ import com.facebook.react.modules.core.PermissionListener
 import com.pushizo.sdk.Pushizo
 import com.pushizo.sdk.HsApiException
 import com.pushizo.sdk.HsCallback
+import com.pushizo.sdk.HsDeliverySetting
 import com.pushizo.sdk.HsInAppMessage
 import com.pushizo.sdk.HsLog
 import com.pushizo.sdk.R
@@ -333,6 +334,33 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
         HsLog.w("uygulama paket bilgisi okunamadı", e)
         emptyArray()
     }
+
+    // --- Android teslimat güçlendirme (ADR-0092): teşhis, ayar ekranı adayları ve diyalog yerel SDK'dadır ---
+
+    /** SDK başlatılmadıysa `{ supported: false }` (JS katmanı "risk yok" durumuna çevirir). */
+    fun deliveryStatus(promise: Promise) =
+        promise.resolve(Arguments.makeNativeMap(Pushizo.Delivery.status()?.toMap() ?: mapOf("supported" to false)))
+
+    fun deliveryShouldShowGuidance(minIntervalDays: Double, promise: Promise) =
+        promise.resolve(Pushizo.Delivery.shouldShowGuidance(minIntervalDays.toInt()))
+
+    /** Ön planda Activity varsa ekran aynı görevde açılır; yerel çağrı istisna atmaz. */
+    fun deliveryOpenSettings(setting: String, promise: Promise) =
+        promise.resolve(Pushizo.Delivery.openSettings(context.currentActivity ?: context, setting.toDeliverySetting()))
+
+    /** Diyalog ön planda bir Activity ister; yoksa hiçbir şey gösterilmez ve `false` döner. Sonuç bir kez bildirilir. */
+    fun deliveryShowGuidance(setting: String, message: String?, promise: Promise) {
+        val activity = context.currentActivity
+        if (activity == null) {
+            promise.resolve(false)
+            return
+        }
+        Pushizo.Delivery.showGuidance(activity, setting.toDeliverySetting(), message) { opened -> promise.resolve(opened) }
+    }
+
+    /** JS değeri (`auto`, `notifications`, `auto_start`, `battery_optimization`, `app_details`); tanınmayan değer `AUTO`. */
+    private fun String.toDeliverySetting(): HsDeliverySetting =
+        HsDeliverySetting.values().firstOrNull { it.name.equals(this, ignoreCase = true) } ?: HsDeliverySetting.AUTO
 
     // --- Özellik bayrakları (ADR-0066) ---
 
