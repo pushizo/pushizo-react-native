@@ -22,7 +22,7 @@ Pod::Spec.new do |s|
 
   # Yerel SDK. Monorepo / yerel geliştirme: uygulama Podfile'ında
   #   pod 'Pushizo', :path => '<repo>/sdk/ios'
-  s.dependency "Pushizo", "~> 0.2"
+  s.dependency "Pushizo", "~> 0.3"
 
   # React Native ≥ 0.71: yeni/eski mimari bağımlılıkları ve codegen (RNPushizoSpec) ayarları.
   if respond_to?(:install_modules_dependencies, true)

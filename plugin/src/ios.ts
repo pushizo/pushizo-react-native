@@ -191,7 +191,7 @@ function insertIntoObjcMethod(src: string, selectorPart: string, tag: string, li
 /** Podfile: NSE hedefi (Pushizo/Extension) ve isteğe bağlı monorepo `:path`. */
 export function applyPodfile(contents: string, props: ResolvedProps): string {
   let src = contents;
-  const source = props.iosSdkPath ? `, :path => '${props.iosSdkPath}'` : `, '~> 0.2'`;
+  const source = props.iosSdkPath ? `, :path => '${props.iosSdkPath}'` : `, '~> 0.3'`;
   if (props.iosSdkPath) {
     src = CodeGenerator.mergeContents({
       src,

@@ -34,7 +34,7 @@ Yüzey eski sağlayıcı v5 React Native API'si ile uyumludur; kuyruk, oturum, t
 (received/opened) ve in-app çizimi yerel SDK'dadır.
 
 - React Native ≥ 0.74; **New Architecture** (TurboModule, codegen `RNPushizoSpec`) ve eski mimari desteklenir.
-- Android minSdk 24, iOS 15.0+. Yerel SDK'lar: `com.pushizo:pushizo-android` 0.2.1, `Pushizo` pod `~> 0.2`.
+- Android minSdk 24, iOS 15.0+. Yerel SDK'lar: `com.pushizo:pushizo-android` 0.3.0, `Pushizo` pod `~> 0.3`.
 - Expo: development build (`expo prebuild` / EAS Build). Expo Go yerel modül içermediği için desteklenmez.
 
 ## Kurulum
@@ -515,7 +515,7 @@ NSE; zengin medya (resim), aksiyon düğmeleri, rozet artışı (`badge_inc`) ve
 
   ```ruby
   target 'PushizoNotificationServiceExtension' do
-    pod 'Pushizo/Extension', '~> 0.2'   # yerel geliştirme: :path => '<repo>/sdk/ios'
+    pod 'Pushizo/Extension', '~> 0.3'   # yerel geliştirme: :path => '<repo>/sdk/ios'
   end
   ```
 
