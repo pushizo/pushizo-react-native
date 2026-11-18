@@ -15,7 +15,9 @@
   NSInteger _listenerCount;
 }
 
-RCT_EXPORT_MODULE(Pushizo)
+// RCT_EXPORT_MODULE kendi +load metodunu tanımladığından, aşağıdaki erken başlatma +load ile çakışmasın diye
+// kayıt __attribute__((constructor)) ile yapılır.
+RCT_EXPORT_MODULE_NO_LOAD(Pushizo, PushizoRN)
 
 /// Erken başlatma: Info.plist'te `PushizoAppId` varsa SDK, uygulama açılışı biter bitmez (JS yüklenmeden) başlatılır.
 /// Böylece UNUserNotificationCenter temsilcisi soğuk açılış tıklamasından önce kurulur.
@@ -99,6 +101,21 @@ RCT_EXPORT_METHOD(login:(NSString *)externalId
                   reject:(RCTPromiseRejectBlock)reject)
 {
   [[PushizoRNBridge shared] login:externalId identityHash:identityHash jwt:jwt resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(isInitialized:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@([[PushizoRNBridge shared] isInitialized]));
+}
+
+RCT_EXPORT_METHOD(loginWithProfile:(NSString *)externalId
+                  profile:(NSDictionary *)profile
+                  identityHash:(NSString *_Nullable)identityHash
+                  jwt:(NSString *_Nullable)jwt
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] loginWithProfile:externalId profile:profile identityHash:identityHash jwt:jwt resolve:resolve reject:reject];
 }
 
 RCT_EXPORT_METHOD(updateUserJwt:(NSString *)jwt
@@ -217,6 +234,41 @@ RCT_EXPORT_METHOD(setPreferences:(NSArray *)preferences
   [[PushizoRNBridge shared] setPreferences:preferences resolve:resolve reject:reject];
 }
 
+RCT_EXPORT_METHOD(setAdsPersonalizationConsent:(BOOL)granted
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] setAdsPersonalizationConsent:granted resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(getConsents:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] getConsents:resolve reject:reject];
+}
+
+// ADM yalnızca Fire OS (Android) içindir; iOS'ta etkisizdir.
+RCT_EXPORT_METHOD(registerAdm:(NSString *)token
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(nil);
+}
+
+RCT_EXPORT_METHOD(setUserProperty:(NSString *)key
+                  property:(NSDictionary *)property
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] setUserProperty:key property:property resolve:resolve reject:reject];
+}
+
+#pragma mark - Reklam kimliği
+
+RCT_EXPORT_METHOD(setAdvertisingId:(NSString *_Nullable)advertisingId)
+{
+  [[PushizoRNBridge shared] setAdvertisingId:advertisingId];
+}
+
 #pragma mark - Push aboneliği
 
 RCT_EXPORT_METHOD(getPushSubscriptionState:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
@@ -251,6 +303,20 @@ RCT_EXPORT_METHOD(clearAll)
   [[PushizoRNBridge shared] clearAll];
 }
 
+// iOS'ta rozet her zaman ayarlanır; sonuç YES (Android'de "rozet bu cihazda gösterilebiliyor mu").
+RCT_EXPORT_METHOD(setBadgeCount:(double)count
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] setBadgeCount:(NSInteger)count];
+  resolve(@YES);
+}
+
+RCT_EXPORT_METHOD(getBadgeCount:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] getBadgeCount:resolve];
+}
+
 RCT_EXPORT_METHOD(removeNotification:(NSString *)identifier
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
@@ -282,9 +348,17 @@ RCT_EXPORT_METHOD(preventDefault:(NSString *)notificationId)
 
 #pragma mark - Oturum
 
-RCT_EXPORT_METHOD(sendEvent:(NSString *)name properties:(NSDictionary *)properties value:(NSNumber *_Nullable)value)
+RCT_EXPORT_METHOD(sendEvent:(NSString *)name properties:(NSDictionary *)properties value:(NSNumber *)value)
 {
   [[PushizoRNBridge shared] sendEvent:name properties:properties value:value];
+}
+
+RCT_EXPORT_METHOD(sendEventWithId:(NSString *)name
+                  properties:(NSDictionary *)properties
+                  value:(NSNumber *)value
+                  eventId:(NSString *)eventId)
+{
+  [[PushizoRNBridge shared] sendEventWithId:name properties:properties value:value eventId:eventId];
 }
 
 #pragma mark - In-app
@@ -360,6 +434,23 @@ RCT_EXPORT_METHOD(inboxUnreadCount:(RCTPromiseResolveBlock)resolve reject:(RCTPr
   [[PushizoRNBridge shared] inboxUnreadCount:resolve reject:reject];
 }
 
+#pragma mark - İçerik kartları
+
+RCT_EXPORT_METHOD(contentCardsList:(double)limit
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] contentCardsList:limit resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(contentCardEvent:(NSString *)id
+                  event:(NSString *)event
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] contentCardEvent:id event:event resolve:resolve reject:reject];
+}
+
 #pragma mark - Canlı sohbet
 
 RCT_EXPORT_METHOD(chatStart:(NSString *_Nullable)name
@@ -383,8 +474,8 @@ RCT_EXPORT_METHOD(chatGetConversation:(RCTPromiseResolveBlock)resolve reject:(RC
   [[PushizoRNBridge shared] chatGetConversation:resolve reject:reject];
 }
 
-RCT_EXPORT_METHOD(chatGetMessages:(NSNumber *_Nullable)afterSeq
-                  beforeSeq:(NSNumber *_Nullable)beforeSeq
+RCT_EXPORT_METHOD(chatGetMessages:(NSNumber *)afterSeq
+                  beforeSeq:(NSNumber *)beforeSeq
                   limit:(double)limit
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
@@ -474,6 +565,26 @@ RCT_EXPORT_METHOD(chatGetVisitorId:(RCTPromiseResolveBlock)resolve reject:(RCTPr
   resolve([[PushizoRNBridge shared] chatVisitorId]);
 }
 
+RCT_EXPORT_METHOD(chatIsListening:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@([[PushizoRNBridge shared] chatIsListening]));
+}
+
+RCT_EXPORT_METHOD(chatShow)
+{
+  [[PushizoRNBridge shared] chatShow];
+}
+
+RCT_EXPORT_METHOD(chatHide:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatHide:resolve];
+}
+
+RCT_EXPORT_METHOD(chatIsPresented:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] chatIsPresented:resolve];
+}
+
 #pragma mark - Live Activities
 
 RCT_EXPORT_METHOD(setupDefaultLiveActivity:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
@@ -507,6 +618,110 @@ RCT_EXPORT_METHOD(requestLocationPermission:(NSString *_Nullable)rationale
                   reject:(RCTPromiseRejectBlock)reject)
 {
   [[PushizoRNBridge shared] requestLocationPermission:rationale resolve:resolve];
+}
+
+RCT_EXPORT_METHOD(locationPermissionGranted:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@([[PushizoRNBridge shared] locationPermissionGranted]));
+}
+
+RCT_EXPORT_METHOD(locationBackgroundPermissionGranted:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@([[PushizoRNBridge shared] locationBackgroundPermissionGranted]));
+}
+
+// iOS "her zaman" izni kendi sistem istemini gösterir; açıklama metni (rationale) kullanılmaz.
+RCT_EXPORT_METHOD(requestBackgroundLocationPermission:(NSString *_Nullable)rationale
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] requestBackgroundLocationPermission:resolve];
+}
+
+RCT_EXPORT_METHOD(setGeofencingEnabled:(BOOL)enabled)
+{
+  [[PushizoRNBridge shared] setGeofencingEnabled:enabled];
+}
+
+RCT_EXPORT_METHOD(isGeofencingEnabled:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] isGeofencingEnabled:resolve];
+}
+
+#pragma mark - Android teslimat güçlendirme (ADR-0092): iOS'ta yoktur; durum "desteklenmiyor", diğerleri etkisiz NO
+
+RCT_EXPORT_METHOD(deliveryStatus:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@{@"supported": @NO});
+}
+
+RCT_EXPORT_METHOD(deliveryShouldShowGuidance:(double)minIntervalDays
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@NO);
+}
+
+RCT_EXPORT_METHOD(deliveryOpenSettings:(NSString *)setting
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@NO);
+}
+
+RCT_EXPORT_METHOD(deliveryShowGuidance:(NSString *)setting
+                  message:(NSString *_Nullable)message
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@NO);
+}
+
+#pragma mark - Özellik bayrakları
+
+RCT_EXPORT_METHOD(featureFlagsRefresh:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] featureFlagsRefresh:resolve];
+}
+
+RCT_EXPORT_METHOD(featureFlagsIsEnabled:(NSString *)key
+                  defaultValue:(BOOL)defaultValue
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve(@([[PushizoRNBridge shared] featureFlagsIsEnabled:key defaultValue:defaultValue]));
+}
+
+RCT_EXPORT_METHOD(featureFlagsGetValue:(NSString *)key
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  resolve([[PushizoRNBridge shared] featureFlagsGetValue:key]);
+}
+
+#pragma mark - Gömülü yerleşimler
+
+RCT_EXPORT_METHOD(placementsList:(NSString *)key
+                  limit:(double)limit
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  [[PushizoRNBridge shared] placementsList:key limit:limit resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(placementsReportImpression:(NSString *)messageId)
+{
+  [[PushizoRNBridge shared] placementsReportImpression:messageId];
+}
+
+RCT_EXPORT_METHOD(placementsReportClick:(NSString *)messageId buttonId:(NSString *)buttonId)
+{
+  [[PushizoRNBridge shared] placementsReportClick:messageId buttonId:buttonId];
+}
+
+RCT_EXPORT_METHOD(placementsReportDismiss:(NSString *)messageId)
+{
+  [[PushizoRNBridge shared] placementsReportDismiss:messageId];
 }
 
 #pragma mark - Hata ayıklama

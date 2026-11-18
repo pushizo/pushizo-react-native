@@ -48,8 +48,12 @@ function load() {
     chatSetTyping: jest.fn(),
     chatStartListening: jest.fn(),
     chatStopListening: jest.fn(),
-    chatAttachmentUrl: resolved('https://api.example.com/sdk/v1/apps/app_1/chat/attachments/att_1?visitor_id=v&token=t'),
+    chatAttachmentUrl: resolved('https://api.pushizo.com/sdk/v1/apps/app_1/chat/attachments/att_1?visitor_id=v&token=t'),
     chatGetVisitorId: resolved('v'.repeat(32)),
+    chatIsListening: resolved(true),
+    chatShow: jest.fn(),
+    chatHide: resolved(true),
+    chatIsPresented: resolved(true),
     addListener: jest.fn(),
     removeListeners: jest.fn(),
   };
@@ -126,8 +130,8 @@ describe('Pushizo.Chat (React Native)', () => {
     expect(native.chatMarkRead).toHaveBeenCalledWith(12);
     expect(() => Pushizo.Chat.markRead(-1)).toThrow(RangeError);
     expect(await Pushizo.Chat.refreshUnreadCount()).toBe(2);
-    await Pushizo.Chat.leaveOfflineMessage('ali@example.com', 'Arayın');
-    expect(native.chatLeaveOfflineMessage).toHaveBeenCalledWith('ali@example.com', 'Arayın', null);
+    await Pushizo.Chat.leaveOfflineMessage('ali@pushizo.com', 'Arayın');
+    expect(native.chatLeaveOfflineMessage).toHaveBeenCalledWith('ali@pushizo.com', 'Arayın', null);
 
     Pushizo.Chat.setTyping(true);
     Pushizo.Chat.startListening();
@@ -137,6 +141,27 @@ describe('Pushizo.Chat (React Native)', () => {
     expect(native.chatStopListening).toHaveBeenCalled();
     expect(await Pushizo.Chat.attachmentUrl('att_1')).toContain('/chat/attachments/att_1');
     expect(native.chatAttachmentUrl).toHaveBeenCalledWith('att_1', false);
+  });
+
+  test('isListening: yerel akış durumu mantıksal değere çevrilir', async () => {
+    const { Pushizo, native } = load();
+    await expect(Pushizo.Chat.isListening()).resolves.toBe(true);
+    native.chatIsListening.mockImplementationOnce(() => Promise.resolve(null));
+    await expect(Pushizo.Chat.isListening()).resolves.toBe(false);
+  });
+
+  test('show / hide / isPresented: hazır sohbet ekranı yerel modüle iletilir, sonuçlar mantıksal değere çevrilir', async () => {
+    const { Pushizo, native } = load();
+    expect(Pushizo.Chat.show()).toBeUndefined();
+    expect(native.chatShow).toHaveBeenCalledTimes(1);
+    await expect(Pushizo.Chat.isPresented()).resolves.toBe(true);
+    await expect(Pushizo.Chat.hide()).resolves.toBe(true);
+    expect(native.chatHide).toHaveBeenCalledTimes(1);
+    // Açık ekran yokken hide false döner; eksik yerel yanıt false sayılır.
+    native.chatHide.mockImplementationOnce(() => Promise.resolve(false));
+    await expect(Pushizo.Chat.hide()).resolves.toBe(false);
+    native.chatIsPresented.mockImplementationOnce(() => Promise.resolve(undefined));
+    await expect(Pushizo.Chat.isPresented()).resolves.toBe(false);
   });
 
   test('olaylar türüne göre dağıtılır; yerel abonelik ilk dinleyicide açılır, sonuncusunda kapanır', () => {

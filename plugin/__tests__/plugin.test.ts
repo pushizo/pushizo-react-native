@@ -134,7 +134,7 @@ describe('validateProps', () => {
     [{ mode: 'development' }, '"appId" Notification Service Extension için gerekli'],
     [{ ...BASE, foo: 1 }, 'bilinmeyen seçenek "foo"'],
     [{ ...BASE, apiUrl: 'ftp://x' }, '"apiUrl"'],
-    [{ ...BASE, iosAppGroup: 'com.example' }, '"iosAppGroup"'],
+    [{ ...BASE, iosAppGroup: 'com.pushizo' }, '"iosAppGroup"'],
     [{ ...BASE, devTeam: 'abc' }, '"devTeam"'],
     [{ ...BASE, androidAccentColor: 'red' }, '"androidAccentColor"'],
     [{ ...BASE, androidSmallIcon: './icon.svg' }, '"androidSmallIcon"'],
@@ -165,7 +165,7 @@ describe('validateProps', () => {
 });
 
 describe('iOS dönüşümleri', () => {
-  const props = validateProps({ ...BASE, apiUrl: 'https://api.example.com' });
+  const props = validateProps({ ...BASE, apiUrl: 'https://api.pushizo.com' });
 
   test('entitlements: aps-environment ve App Group (tekrar uygulamada çoğalmaz)', () => {
     const e = applyEntitlements(applyEntitlements({ 'com.apple.security.application-groups': ['group.other'] }, props, 'group.x'), props, 'group.x');
@@ -179,7 +179,7 @@ describe('iOS dönüşümleri', () => {
       UIBackgroundModes: ['audio', 'remote-notification'],
       PushizoAppGroup: 'group.x',
       PushizoAppId: 'app_test_123',
-      PushizoApiUrl: 'https://api.example.com',
+      PushizoApiUrl: 'https://api.pushizo.com',
       PushizoRequiresPrivacyConsent: false,
     });
   });
@@ -266,15 +266,15 @@ describe('iOS dönüşümleri', () => {
     expect(out).toContain("pod 'Pushizo/Extension', :path => '../../../sdk/ios'");
     expect(out).toMatch(/config = use_native_modules!\n# @generated begin pushizo-sdk[^\n]*\n {2}pod 'Pushizo', :path => '..\/..\/..\/sdk\/ios'/);
     const published = applyPodfile(podfile, props);
-    expect(published).toContain("pod 'Pushizo/Extension', '~> 0.1'");
+    expect(published).toContain("pod 'Pushizo/Extension', '~> 0.3'");
     expect(applyPodfile(out, validateProps({ mode: 'development', iosNotificationServiceExtension: false }))).not.toContain(NSE_TARGET);
   });
 
   test('NSE Info.plist: şablona app kimliği, API ve App Group eklenir (XML kaçışlı)', () => {
     const template = fs.readFileSync(path.join(__dirname, '..', 'templates', NSE_TARGET, 'Info.plist'), 'utf8');
-    const out = buildNseInfoPlist(template, validateProps({ ...BASE, apiUrl: 'https://a.example.com/?x=1&y=2' }), 'group.x');
+    const out = buildNseInfoPlist(template, validateProps({ ...BASE, apiUrl: 'https://a.pushizo.com/?x=1&y=2' }), 'group.x');
     expect(out).toContain('<key>PushizoAppId</key>\n\t<string>app_test_123</string>');
-    expect(out).toContain('<string>https://a.example.com/?x=1&amp;y=2</string>');
+    expect(out).toContain('<string>https://a.pushizo.com/?x=1&amp;y=2</string>');
     expect(out).toContain('<key>NSExtensionPointIdentifier</key>');
     expect(out.trim().endsWith('</plist>')).toBe(true);
   });
@@ -318,7 +318,7 @@ describe('Android dönüşümleri', () => {
       await manifest(),
       validateProps({
         ...BASE,
-        apiUrl: 'https://api.example.com',
+        apiUrl: 'https://api.pushizo.com',
         logLevel: 'debug',
         requiresPrivacyConsent: true,
         androidSmallIcon: './icon.png',
@@ -335,7 +335,7 @@ describe('Android dönüşümleri', () => {
       [META.icon]: `@drawable/${ICON_RESOURCE}`,
       [META.color]: '@color/pushizo_notification_color',
       [META.appId]: 'app_test_123',
-      [META.apiUrl]: 'https://api.example.com',
+      [META.apiUrl]: 'https://api.pushizo.com',
       [META.requiresConsent]: 'true',
       [META.logLevel]: 'debug',
       [META.channelId]: 'campaigns',
@@ -394,7 +394,7 @@ describe('tüm mod zinciri (compileModsAsync)', () => {
       const config = withPushizo(baseConfig(), {
         ...BASE,
         mode: 'production',
-        apiUrl: 'https://api.example.com',
+        apiUrl: 'https://api.pushizo.com',
         androidSmallIcon: './assets/notification-icon.png',
         androidAccentColor: '#FF5A1F',
       });

@@ -25,6 +25,52 @@ const PREFERENCES_RAW = {
     { key: 'news', name: { en: 'News' }, description: {}, channels: null, defaultOptedIn: true },
     { name: { en: 'Anahtarsız' } },
   ],
+  consents: [
+    { purpose: 'ads_personalization', granted: true, source: 'sdk', updatedAt: 1700000002000 },
+    // Amaçsız kayıt atlanır.
+    { granted: true },
+  ],
+};
+
+/** Yerel köprünün yerleşim mesajı (Android `HsInAppMessage.toMap()` / iOS `map(HSInAppMessage)` biçimi). */
+const PLACEMENT_RAW = {
+  id: 'm1',
+  priority: 5,
+  triggers: [{ kind: 'session_start' }],
+  triggerGroups: [[{ kind: 'session_start' }], [{ kind: 'trigger', key: 'level', op: 'eq', value: 'gold' }, { kind: 'session_duration', seconds: 30 }]],
+  variantId: 'v2',
+  display: {
+    layout: 'banner_top',
+    backgroundColor: '#fff',
+    textColor: null,
+    dismissible: true,
+    autoDismissSeconds: null,
+    contentType: 'blocks',
+    html: null,
+    htmlHeight: null,
+    blocks: [
+      { type: 'image', url: 'https://cdn.pushizo.com/a.png', alt: null },
+      { type: 'title', text: 'Kampanya' },
+      { type: 'body', text: 'Bugün %20 indirim' },
+      { type: 'button', id: 'b1', text: 'İncele', action: { type: 'url', url: 'https://pushizo.com/k' }, backgroundColor: '#000', textColor: '#fff' },
+      {
+        type: 'carousel',
+        id: 'c1',
+        cards: [
+          { id: 'k1', title: 'Kart', body: null, imageUrl: null, imageAlt: null, button: { id: 'b2', text: 'Al', action: { type: 'outcome', name: 'buy', value: 9.5 }, backgroundColor: null, textColor: null } },
+          { id: 'k2', title: 'Düğmesiz', body: 'x', imageUrl: 'https://cdn.pushizo.com/k.png', imageAlt: 'k', button: null },
+        ],
+      },
+      { type: 'video', url: 'x' },
+    ],
+  },
+  remainingImpressions: 3,
+  minIntervalSeconds: 60,
+  stopAfterInteraction: false,
+  lastImpressionAt: null,
+  endAt: 1700000000000,
+  language: 'tr',
+  raw: { id: 'm1', placement: 'ana_sayfa_ust' },
 };
 
 function createNative(): Record<string, jest.Mock> {
@@ -33,6 +79,8 @@ function createNative(): Record<string, jest.Mock> {
     initialize: resolved(),
     setConsentGiven: jest.fn(),
     login: resolved(),
+    isInitialized: resolved(true),
+    loginWithProfile: resolved(),
     updateUserJwt: resolved(),
     logout: jest.fn(),
     addTags: resolved(),
@@ -47,10 +95,15 @@ function createNative(): Record<string, jest.Mock> {
     removeSms: resolved(),
     getExternalId: resolved('user_42'),
     getUserId: resolved('hs_1'),
-    getEmails: resolved(['ali@example.com', 5]),
+    getEmails: resolved(['ali@pushizo.com', 5]),
     getSmsNumbers: resolved(['+905321234567']),
     getPreferences: resolved(PREFERENCES_RAW),
     setPreferences: resolved(PREFERENCES_RAW),
+    setAdsPersonalizationConsent: resolved(PREFERENCES_RAW),
+    getConsents: resolved([{ purpose: 'ads_personalization', granted: false, source: null, updatedAt: null }, { granted: true }, 'bozuk']),
+    registerAdm: resolved(),
+    setUserProperty: resolved(),
+    setAdvertisingId: jest.fn(),
     getPushSubscriptionState: resolved({ id: 'sub_1', token: 'tok', optedIn: true, permission: true }),
     optIn: jest.fn(),
     optOut: jest.fn(),
@@ -59,10 +112,13 @@ function createNative(): Record<string, jest.Mock> {
     clearAll: jest.fn(),
     removeNotification: resolved(),
     removeGroupedNotifications: resolved(),
+    setBadgeCount: resolved(true),
+    getBadgeCount: resolved(3),
     setForegroundHandlerEnabled: jest.fn(),
     displayNotification: jest.fn(),
     preventDefault: jest.fn(),
     sendEvent: jest.fn(),
+    sendEventWithId: jest.fn(),
     addTriggers: resolved(),
     removeTriggers: jest.fn(),
     clearTriggers: jest.fn(),
@@ -82,11 +138,40 @@ function createNative(): Record<string, jest.Mock> {
     inboxMarkAllRead: resolved(0),
     inboxArchive: resolved(),
     inboxUnreadCount: resolved(4),
+    contentCardsList: resolved({
+      cards: [
+        { id: 'c1', messageId: 'm1', type: 'captioned_image', title: 'Kart', body: null, url: 'app://x', imageUrl: 'https://cdn/x.png', buttonText: 'İncele', data: {}, pinned: true, priority: 70, viewed: false, clicked: false, expiresAt: null, createdAt: 1700000000000 },
+        { id: 'c2', type: 'yeni-tur', viewed: true },
+      ],
+      unviewedCount: 1,
+    }),
+    contentCardEvent: resolved({ id: 'c1', type: 'classic', viewed: true, clicked: true, data: {} }),
     setupDefaultLiveActivity: resolved(),
     startDefaultLiveActivity: resolved(),
     setLocationShared: jest.fn(),
     isLocationShared: resolved(true),
     requestLocationPermission: resolved(true),
+    locationPermissionGranted: resolved(true),
+    locationBackgroundPermissionGranted: resolved(false),
+    requestBackgroundLocationPermission: resolved(true),
+    setGeofencingEnabled: jest.fn(),
+    isGeofencingEnabled: resolved(false),
+    deliveryStatus: resolved({
+      supported: true, manufacturer: 'xiaomi', brand: 'redmi', vendor: 'xiaomi', aggressiveVendor: true, rom: 'hyperos', romVersion: '1.0.2.0',
+      notificationsEnabled: true, channelBlocked: false, batteryOptimizationExempt: false, backgroundRestricted: false, standbyBucket: 'rare',
+      powerSaveMode: true, dataSaverEnabled: false, restricted: true, risk: 'elevated',
+      recommendedSettings: ['auto_start', 'battery_optimization', 'gelecek_ekran'],
+    }),
+    deliveryShouldShowGuidance: resolved(true),
+    deliveryOpenSettings: resolved(true),
+    deliveryShowGuidance: resolved(true),
+    featureFlagsRefresh: resolved(true),
+    featureFlagsIsEnabled: resolved(true),
+    featureFlagsGetValue: resolved({ value: 'mavi' }),
+    placementsList: resolved([PLACEMENT_RAW, { priority: 1 }, 'bozuk']),
+    placementsReportImpression: jest.fn(),
+    placementsReportClick: jest.fn(),
+    placementsReportDismiss: jest.fn(),
     setLogLevel: jest.fn(),
     addListener: jest.fn(),
     removeListeners: jest.fn(),
@@ -131,8 +216,8 @@ function load(options: { turbo?: boolean; legacy?: boolean } = { turbo: true }) 
 describe('Pushizo (React Native)', () => {
   test('initialize: appId ve tanımlı seçenekler yerel modüle iletilir, izin önbelleği güncellenir', async () => {
     const { Pushizo, LogLevel, env } = load();
-    await Pushizo.initialize('app_1', { apiUrl: 'https://api.example.com', logLevel: LogLevel.Debug, appGroup: undefined });
-    expect(env.native.initialize).toHaveBeenCalledWith('app_1', { apiUrl: 'https://api.example.com', logLevel: 'debug' });
+    await Pushizo.initialize('app_1', { apiUrl: 'https://api.pushizo.com', logLevel: LogLevel.Debug, appGroup: undefined });
+    expect(env.native.initialize).toHaveBeenCalledWith('app_1', { apiUrl: 'https://api.pushizo.com', logLevel: 'debug' });
     expect(Pushizo.Notifications.permission).toBe(true);
     // izin olayı içeride dinlenir; tekrar initialize ikinci abonelik açmaz
     await Pushizo.initialize('app_1');
@@ -264,11 +349,214 @@ describe('Pushizo (React Native)', () => {
     await expect(Pushizo.Location.requestPermission()).rejects.toMatchObject({ code: 'NO_ACTIVITY' });
   });
 
+  test('Delivery.status: yerel durum modele çevrilir; tanınmayan ayar ekranı atlanır', async () => {
+    const { Pushizo, env } = load();
+    await expect(Pushizo.Delivery.status()).resolves.toEqual({
+      supported: true, manufacturer: 'xiaomi', brand: 'redmi', vendor: 'xiaomi', aggressiveVendor: true, rom: 'hyperos', romVersion: '1.0.2.0',
+      notificationsEnabled: true, channelBlocked: false, batteryOptimizationExempt: false, backgroundRestricted: false, standbyBucket: 'rare',
+      powerSaveMode: true, dataSaverEnabled: false, restricted: true, risk: 'elevated',
+      recommendedSettings: ['auto_start', 'battery_optimization'],
+    });
+    expect(env.native.deliveryStatus).toHaveBeenCalledTimes(1);
+  });
+
+  test('Delivery: iOS ve başlatılmamış SDK için desteklenmiyor / risk yok; çağrılar false döner', async () => {
+    const { Pushizo, env } = load();
+    for (const raw of [{ supported: false }, null, {}]) {
+      env.native.deliveryStatus.mockResolvedValueOnce(raw);
+      const status = await Pushizo.Delivery.status();
+      expect(status).toMatchObject({ supported: false, risk: 'none', restricted: false, vendor: 'other', recommendedSettings: [] });
+    }
+    env.native.deliveryShouldShowGuidance.mockResolvedValueOnce(false);
+    env.native.deliveryOpenSettings.mockResolvedValueOnce(false);
+    env.native.deliveryShowGuidance.mockResolvedValueOnce(null);
+    await expect(Pushizo.Delivery.shouldShowGuidance()).resolves.toBe(false);
+    await expect(Pushizo.Delivery.openSettings()).resolves.toBe(false);
+    await expect(Pushizo.Delivery.showGuidance()).resolves.toBe(false);
+  });
+
+  test('Delivery: argümanlar yerel modüle iletilir, geçersiz değer yerel modüle gitmez', async () => {
+    const { Pushizo, env } = load();
+    await expect(Pushizo.Delivery.shouldShowGuidance()).resolves.toBe(true);
+    await Pushizo.Delivery.shouldShowGuidance(30);
+    expect(env.native.deliveryShouldShowGuidance.mock.calls).toEqual([[14], [30]]);
+    await expect(Pushizo.Delivery.shouldShowGuidance(-1)).rejects.toThrow('minIntervalDays');
+    await expect(Pushizo.Delivery.shouldShowGuidance(1.5)).rejects.toThrow('minIntervalDays');
+
+    await expect(Pushizo.Delivery.openSettings()).resolves.toBe(true);
+    await Pushizo.Delivery.openSettings('auto_start');
+    expect(env.native.deliveryOpenSettings.mock.calls).toEqual([['auto'], ['auto_start']]);
+    await expect(Pushizo.Delivery.openSettings('autoStart' as never)).rejects.toThrow('geçersiz ayar ekranı');
+
+    await expect(Pushizo.Delivery.showGuidance()).resolves.toBe(true);
+    await Pushizo.Delivery.showGuidance({ setting: 'battery_optimization', message: 'Bildirimleri kaçırmayın' });
+    await Pushizo.Delivery.showGuidance({ message: '  ' });
+    expect(env.native.deliveryShowGuidance.mock.calls).toEqual([
+      ['auto', null],
+      ['battery_optimization', 'Bildirimleri kaçırmayın'],
+      ['auto', null],
+    ]);
+    await expect(Pushizo.Delivery.showGuidance({ message: 42 as never })).rejects.toThrow('message');
+    await expect(Pushizo.Delivery.showGuidance({ setting: 'pil' as never })).rejects.toThrow('geçersiz ayar ekranı');
+    expect(env.native.deliveryShowGuidance).toHaveBeenCalledTimes(3);
+    expect(env.native.deliveryOpenSettings).toHaveBeenCalledTimes(2);
+  });
+
   test('Location: eski mimaride NativeModules.Pushizo kullanılır', async () => {
     const { Pushizo, env } = load({ turbo: false, legacy: true });
     Pushizo.Location.setShared(true);
     await expect(Pushizo.Location.isShared()).resolves.toBe(true);
     expect(env.native.setLocationShared).toHaveBeenCalledWith(true);
+  });
+
+  test('Location: bölge izleme tercihi yerel modüle iletilir; köprü izin istemez', async () => {
+    const { Pushizo, env } = load();
+    Pushizo.Location.setGeofencingEnabled(true);
+    Pushizo.Location.setGeofencingEnabled(false);
+    // Mantıksal olmayan değer izlemeyi açmaz (varsayılan kapalı; ADR-0065).
+    Pushizo.Location.setGeofencingEnabled('true' as never);
+    expect(env.native.setGeofencingEnabled.mock.calls).toEqual([[true], [false], [false]]);
+    await expect(Pushizo.Location.isGeofencingEnabled()).resolves.toBe(false);
+    env.native.isGeofencingEnabled.mockResolvedValueOnce(true);
+    await expect(Pushizo.Location.isGeofencingEnabled()).resolves.toBe(true);
+    env.native.isGeofencingEnabled.mockResolvedValueOnce(null);
+    await expect(Pushizo.Location.isGeofencingEnabled()).resolves.toBe(false);
+    expect(env.native.requestLocationPermission).not.toHaveBeenCalled();
+  });
+
+  test('FeatureFlags: refresh, isEnabled ve getValue yerel modüle iletilir; varsayılanlar uygulanır', async () => {
+    const { Pushizo, env } = load();
+    await expect(Pushizo.FeatureFlags.refresh()).resolves.toBe(true);
+    env.native.featureFlagsRefresh.mockResolvedValueOnce(false);
+    await expect(Pushizo.FeatureFlags.refresh()).resolves.toBe(false);
+
+    await expect(Pushizo.FeatureFlags.isEnabled('yeni_sepet')).resolves.toBe(true);
+    expect(env.native.featureFlagsIsEnabled).toHaveBeenLastCalledWith('yeni_sepet', false);
+    await Pushizo.FeatureFlags.isEnabled('kapali', true);
+    expect(env.native.featureFlagsIsEnabled).toHaveBeenLastCalledWith('kapali', true);
+    // Mantıksal olmayan varsayılan `false` sayılır; yerel sonuç mantıksal değilse false.
+    await Pushizo.FeatureFlags.isEnabled('x', 'evet' as never);
+    expect(env.native.featureFlagsIsEnabled).toHaveBeenLastCalledWith('x', false);
+    env.native.featureFlagsIsEnabled.mockResolvedValueOnce(undefined);
+    await expect(Pushizo.FeatureFlags.isEnabled('x')).resolves.toBe(false);
+
+    await expect(Pushizo.FeatureFlags.getValue('renk', 'kirmizi')).resolves.toBe('mavi');
+    expect(env.native.featureFlagsGetValue).toHaveBeenLastCalledWith('renk');
+    env.native.featureFlagsGetValue.mockResolvedValueOnce({ value: null });
+    await expect(Pushizo.FeatureFlags.getValue('sepet_limiti', 10)).resolves.toBe(10);
+    env.native.featureFlagsGetValue.mockResolvedValueOnce({});
+    await expect(Pushizo.FeatureFlags.getValue('bilinmeyen')).resolves.toBeNull();
+    env.native.featureFlagsGetValue.mockResolvedValueOnce({ value: { a: [1, 'b', false] } });
+    await expect(Pushizo.FeatureFlags.getValue('json')).resolves.toEqual({ a: [1, 'b', false] });
+    env.native.featureFlagsGetValue.mockResolvedValueOnce({ value: 0 });
+    await expect(Pushizo.FeatureFlags.getValue('sifir', 7)).resolves.toBe(0);
+    env.native.featureFlagsGetValue.mockResolvedValueOnce({ value: false });
+    await expect(Pushizo.FeatureFlags.getValue('kapali', true)).resolves.toBe(false);
+  });
+
+  test('FeatureFlags: boş anahtar yerel modüle gitmeden reddedilir', async () => {
+    const { Pushizo, env } = load();
+    await expect(Pushizo.FeatureFlags.isEnabled('')).rejects.toThrow('key');
+    await expect(Pushizo.FeatureFlags.getValue(' ')).rejects.toThrow('key');
+    expect(env.native.featureFlagsIsEnabled).not.toHaveBeenCalled();
+    expect(env.native.featureFlagsGetValue).not.toHaveBeenCalled();
+  });
+
+  test('Placements.list: anahtar ve limit iletilir, yerel sonuç tipli modele eşlenir', async () => {
+    const { Pushizo, env } = load();
+    const messages = await Pushizo.Placements.list('ana_sayfa_ust');
+    expect(env.native.placementsList).toHaveBeenLastCalledWith('ana_sayfa_ust', 1);
+    // Kimliksiz ve nesne olmayan kayıtlar atlanır.
+    expect(messages).toHaveLength(1);
+    const [m] = messages;
+    expect(m).toMatchObject({
+      id: 'm1',
+      priority: 5,
+      variantId: 'v2',
+      remainingImpressions: 3,
+      minIntervalSeconds: 60,
+      stopAfterInteraction: false,
+      lastImpressionAt: null,
+      endAt: 1700000000000,
+      language: 'tr',
+      raw: { id: 'm1', placement: 'ana_sayfa_ust' },
+    });
+    expect(m.triggers).toEqual([{ kind: 'session_start' }]);
+    expect(m.triggerGroups).toEqual([
+      [{ kind: 'session_start' }],
+      [{ kind: 'trigger', key: 'level', op: 'eq', value: 'gold' }, { kind: 'session_duration', seconds: 30 }],
+    ]);
+    expect(m.display).toMatchObject({ layout: 'banner_top', backgroundColor: '#fff', textColor: null, dismissible: true, contentType: 'blocks', html: null });
+    // Tanınmayan blok (`video`) atlanır; düğmeler blok ve carousel kartlarından toplanır.
+    expect(m.display.blocks.map((b) => b.type)).toEqual(['image', 'title', 'body', 'button', 'carousel']);
+    expect(m.display.blocks[3]).toEqual({ type: 'button', id: 'b1', text: 'İncele', action: { type: 'url', url: 'https://pushizo.com/k' }, backgroundColor: '#000', textColor: '#fff' });
+    expect(m.display.buttons.map((b) => b.id)).toEqual(['b1', 'b2']);
+    expect(m.display.buttons[1].action).toEqual({ type: 'outcome', name: 'buy', value: 9.5 });
+    const carousel = m.display.blocks[4];
+    expect(carousel.type === 'carousel' && carousel.cards[1]).toEqual({ id: 'k2', title: 'Düğmesiz', body: 'x', imageUrl: 'https://cdn.pushizo.com/k.png', imageAlt: 'k', button: null });
+
+    await Pushizo.Placements.list('sepet.alt-1', 3);
+    expect(env.native.placementsList).toHaveBeenLastCalledWith('sepet.alt-1', 3);
+    await Pushizo.Placements.list('sepet', { limit: 10 });
+    expect(env.native.placementsList).toHaveBeenLastCalledWith('sepet', 10);
+    await Pushizo.Placements.list('sepet', {});
+    expect(env.native.placementsList).toHaveBeenLastCalledWith('sepet', 1);
+  });
+
+  test('Placements.list: bilinmeyen düzen/aksiyon ve eksik alanlar güvenli varsayılana düşer; dizi dışı sonuç boş liste', async () => {
+    const { Pushizo, env } = load();
+    env.native.placementsList.mockResolvedValueOnce([
+      { id: 'm2', display: { layout: 'popup', contentType: 'html', html: '<p>x</p>', htmlHeight: 120, blocks: [{ type: 'button', id: 'b', text: 't', action: { type: 'garip' } }] } },
+    ]);
+    const [m] = await Pushizo.Placements.list('ana_sayfa_ust');
+    expect(m.display).toMatchObject({ layout: 'modal', contentType: 'html', html: '<p>x</p>', htmlHeight: 120, dismissible: true, autoDismissSeconds: null });
+    expect(m.display.buttons[0].action).toEqual({ type: 'dismiss' });
+    expect(m).toMatchObject({ priority: 0, remainingImpressions: 1, minIntervalSeconds: 0, variantId: null, triggers: [], triggerGroups: [], raw: {} });
+    env.native.placementsList.mockResolvedValueOnce(null);
+    await expect(Pushizo.Placements.list('ana_sayfa_ust')).resolves.toEqual([]);
+  });
+
+  test('Placements.list: geçersiz anahtar ve limit yerel modüle gitmeden reddedilir; yerel INVALID_ARGUMENT iletilir', async () => {
+    const { Pushizo, env } = load();
+    for (const key of ['', 'Ana', '1abc', 'a'.repeat(65), 'ana sayfa', '../kotu', 'ana/sayfa']) {
+      await expect(Pushizo.Placements.list(key)).rejects.toThrow('yerleşim anahtarı');
+    }
+    await expect(Pushizo.Placements.list(42 as never)).rejects.toThrow(TypeError);
+    for (const limit of [0, 11, 1.5, Number.NaN]) {
+      await expect(Pushizo.Placements.list('ana_sayfa_ust', limit)).rejects.toThrow('limit 1-10');
+      await expect(Pushizo.Placements.list('ana_sayfa_ust', { limit })).rejects.toThrow(RangeError);
+    }
+    expect(env.native.placementsList).not.toHaveBeenCalled();
+    await expect(Pushizo.Placements.list('a'.repeat(64))).resolves.toBeDefined();
+    env.native.placementsList.mockReturnValueOnce(
+      Promise.reject(Object.assign(new Error('Geçersiz yerleşim anahtarı.'), { code: 'INVALID_ARGUMENT' })),
+    );
+    await expect(Pushizo.Placements.list('ana_sayfa_ust')).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
+  test('Placements: rapor çağrıları mesaj kimliğiyle yerel modüle iletilir; geçersiz mesaj/düğme reddedilir', async () => {
+    const { Pushizo, env } = load();
+    const [message] = await Pushizo.Placements.list('ana_sayfa_ust');
+    Pushizo.Placements.reportImpression(message);
+    Pushizo.Placements.reportClick(message, 'b1');
+    Pushizo.Placements.reportDismiss(message);
+    expect(env.native.placementsReportImpression).toHaveBeenCalledWith('m1');
+    expect(env.native.placementsReportClick).toHaveBeenCalledWith('m1', 'b1');
+    expect(env.native.placementsReportDismiss).toHaveBeenCalledWith('m1');
+    expect(() => Pushizo.Placements.reportImpression(null as never)).toThrow('message');
+    expect(() => Pushizo.Placements.reportDismiss({ id: '' } as never)).toThrow('message');
+    expect(() => Pushizo.Placements.reportClick(message, '')).toThrow('buttonId');
+    expect(env.native.placementsReportImpression).toHaveBeenCalledTimes(1);
+    expect(env.native.placementsReportClick).toHaveBeenCalledTimes(1);
+    expect(env.native.placementsReportDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  test('FeatureFlags ve Placements: eski mimaride NativeModules.Pushizo kullanılır', async () => {
+    const { Pushizo, env } = load({ turbo: false, legacy: true });
+    await expect(Pushizo.FeatureFlags.isEnabled('yeni_sepet')).resolves.toBe(true);
+    await expect(Pushizo.Placements.list('ana_sayfa_ust')).resolves.toHaveLength(1);
+    expect(env.native.featureFlagsIsEnabled).toHaveBeenCalledWith('yeni_sepet', false);
+    expect(env.native.placementsList).toHaveBeenCalledWith('ana_sayfa_ust', 1);
   });
 
   test('User: tag, alias, dil, e-posta/SMS ve kimlikler', async () => {
@@ -279,7 +567,7 @@ describe('Pushizo (React Native)', () => {
     await Pushizo.User.addAlias('crm_id', '42');
     await Pushizo.User.removeAlias('crm_id');
     await Pushizo.User.setLanguage('tr');
-    await Pushizo.User.addEmail('ali@example.com');
+    await Pushizo.User.addEmail('ali@pushizo.com');
     await Pushizo.User.addSms('+905321234567');
     expect(env.native.addTags).toHaveBeenNthCalledWith(1, { plan: 'pro' });
     expect(env.native.addTags).toHaveBeenNthCalledWith(2, { a: '1', b: '2' });
@@ -287,12 +575,12 @@ describe('Pushizo (React Native)', () => {
     expect(env.native.addAliases).toHaveBeenCalledWith({ crm_id: '42' });
     expect(env.native.removeAlias).toHaveBeenCalledWith('crm_id');
     expect(env.native.setLanguage).toHaveBeenCalledWith('tr');
-    expect(env.native.addEmail).toHaveBeenCalledWith('ali@example.com');
+    expect(env.native.addEmail).toHaveBeenCalledWith('ali@pushizo.com');
     expect(env.native.addSms).toHaveBeenCalledWith('+905321234567');
     await expect(Pushizo.User.getTags()).resolves.toEqual({ plan: 'pro', level: '3' });
     await expect(Pushizo.User.getExternalId()).resolves.toBe('user_42');
     await expect(Pushizo.User.getPushizoId()).resolves.toBe('hs_1');
-    await expect(Pushizo.User.getEmails()).resolves.toEqual(['ali@example.com']);
+    await expect(Pushizo.User.getEmails()).resolves.toEqual(['ali@pushizo.com']);
     await expect(Pushizo.User.getSmsNumbers()).resolves.toEqual(['+905321234567']);
   });
 
@@ -331,15 +619,236 @@ describe('Pushizo (React Native)', () => {
         { key: 'promo', name: { tr: 'Kampanyalar', en: 'Promotions' }, description: { tr: 'İndirimler' }, channels: ['email', 'android_push'], defaultOptedIn: false },
         { key: 'news', name: { en: 'News' }, description: {}, channels: null, defaultOptedIn: true },
       ],
+      consents: [{ purpose: 'ads_personalization', granted: true, source: 'sdk', updatedAt: 1700000002000 }],
     });
+  });
+
+  test('User.setAdsPersonalizationConsent / getConsents: yerel modüle iletilir, sonuç tipli modele eşlenir', async () => {
+    const { Pushizo, env } = load();
+    const result = await Pushizo.User.setAdsPersonalizationConsent(true);
+    expect(env.native.setAdsPersonalizationConsent).toHaveBeenCalledWith(true);
+    expect(result.consents).toEqual([{ purpose: 'ads_personalization', granted: true, source: 'sdk', updatedAt: 1700000002000 }]);
+    expect(result.preferences).toHaveLength(2);
+    await Pushizo.User.setAdsPersonalizationConsent(false);
+    expect(env.native.setAdsPersonalizationConsent).toHaveBeenLastCalledWith(false);
+    await expect(Pushizo.User.setAdsPersonalizationConsent('evet' as never)).rejects.toThrow('granted');
+    expect(env.native.setAdsPersonalizationConsent).toHaveBeenCalledTimes(2);
+
+    await expect(Pushizo.User.getConsents()).resolves.toEqual([
+      { purpose: 'ads_personalization', granted: false, source: null, updatedAt: null },
+    ]);
+    env.native.getConsents.mockImplementationOnce(() => Promise.resolve(null));
+    await expect(Pushizo.User.getConsents()).resolves.toEqual([]);
+    env.native.getConsents.mockImplementationOnce(() =>
+      Promise.reject(Object.assign(new Error('Abonelik henüz kaydedilmedi'), { code: 'NOT_READY' })),
+    );
+    await expect(Pushizo.User.getConsents()).rejects.toMatchObject({ code: 'NOT_READY' });
+  });
+
+  test('login: profil verilirse loginWithProfile çağrılır; tip hatası yerel modüle gitmez', async () => {
+    const { Pushizo, env } = load();
+    await Pushizo.login('user_42', {
+      jwt: 'j.w.t',
+      profile: { email: 'ali@ornek.com', sms: '+905321234567', tags: { plan: 'pro' }, aliases: { crm_id: '7' } },
+    });
+    expect(env.native.loginWithProfile).toHaveBeenCalledWith(
+      'user_42',
+      { email: 'ali@ornek.com', sms: '+905321234567', tags: { plan: 'pro' }, aliases: { crm_id: '7' } },
+      null,
+      'j.w.t',
+    );
+    expect(env.native.login).not.toHaveBeenCalled();
+    // Yalnızca verilen alanlar iletilir.
+    await Pushizo.login('user_42', { identityHash: 'h', profile: { email: 'a@b.co' } });
+    expect(env.native.loginWithProfile).toHaveBeenLastCalledWith('user_42', { email: 'a@b.co' }, 'h', null);
+    // Profilsiz giriş eski yerel metodu kullanır.
+    await Pushizo.login('user_42', 'h');
+    expect(env.native.login).toHaveBeenCalledWith('user_42', 'h', null);
+
+    expect(() => Pushizo.login('user_42', { profile: 'x' as never })).toThrow('profile bir nesne');
+    expect(() => Pushizo.login('user_42', { profile: { email: ' ' } })).toThrow('profile.email');
+    expect(() => Pushizo.login('user_42', { profile: { sms: 5 as never } })).toThrow('profile.sms');
+    expect(() => Pushizo.login('user_42', { profile: { tags: { plan: 1 as never } } })).toThrow('profile.tags.plan');
+    expect(() => Pushizo.login('user_42', { profile: { aliases: [] as never } })).toThrow('profile.aliases');
+    expect(env.native.loginWithProfile).toHaveBeenCalledTimes(2);
+  });
+
+  test('isInitialized, User.registerAdm, Ads.setAdvertisingId: yerel modüle iletilir', async () => {
+    const { Pushizo, env } = load();
+    await expect(Pushizo.isInitialized()).resolves.toBe(true);
+    env.native.isInitialized.mockImplementationOnce(() => Promise.resolve(null));
+    await expect(Pushizo.isInitialized()).resolves.toBe(false);
+
+    await Pushizo.User.registerAdm('amzn1.adm-registration.v3.X');
+    expect(env.native.registerAdm).toHaveBeenCalledWith('amzn1.adm-registration.v3.X');
+    expect(() => Pushizo.User.registerAdm(' ')).toThrow('token');
+
+    Pushizo.Ads.setAdvertisingId('38400000-8cf0-11bd-b23e-10b96e40000d');
+    expect(env.native.setAdvertisingId).toHaveBeenLastCalledWith('38400000-8cf0-11bd-b23e-10b96e40000d');
+    Pushizo.Ads.setAdvertisingId(null);
+    expect(env.native.setAdvertisingId).toHaveBeenLastCalledWith(null);
+    Pushizo.Ads.setAdvertisingId('  ');
+    expect(env.native.setAdvertisingId).toHaveBeenLastCalledWith(null);
+    expect(() => Pushizo.Ads.setAdvertisingId(7 as never)).toThrow('id');
+    expect(env.native.setAdvertisingId).toHaveBeenCalledTimes(3);
+  });
+
+  test('Notifications.setBadgeCount / clearBadge: negatif olmayan tam sayı yerel modüle iletilir', () => {
+    const { Pushizo, env } = load();
+    void Pushizo.Notifications.setBadgeCount(3);
+    expect(env.native.setBadgeCount).toHaveBeenLastCalledWith(3);
+    void Pushizo.Notifications.clearBadge();
+    expect(env.native.setBadgeCount).toHaveBeenLastCalledWith(0);
+    expect(() => Pushizo.Notifications.setBadgeCount(-1)).toThrow('count');
+    expect(() => Pushizo.Notifications.setBadgeCount(1.5)).toThrow('count');
+    expect(() => Pushizo.Notifications.setBadgeCount('2' as never)).toThrow('count');
+    expect(env.native.setBadgeCount).toHaveBeenCalledTimes(2);
+  });
+
+  test('Notifications rozeti: yerel sonuç (rozet gösterilebiliyor mu) döner; hata ya da eski yerel modül false, getBadgeCount sayıyı okur', async () => {
+    const { Pushizo, env } = load();
+    await expect(Pushizo.Notifications.setBadgeCount(5)).resolves.toBe(true);
+    await expect(Pushizo.Notifications.clearBadge()).resolves.toBe(true);
+    // Android: bildirimler kapalı / kanal rozeti kapalı → false.
+    env.native.setBadgeCount.mockImplementationOnce(() => Promise.resolve(false));
+    await expect(Pushizo.Notifications.setBadgeCount(1)).resolves.toBe(false);
+    // Sonuç beklenmese de işlenmemiş reddetme oluşmaz: yerel hata false olur.
+    env.native.setBadgeCount.mockImplementationOnce(() => Promise.reject(new Error('yerel hata')));
+    await expect(Pushizo.Notifications.setBadgeCount(1)).resolves.toBe(false);
+    env.native.setBadgeCount.mockImplementationOnce(() => undefined as never);
+    await expect(Pushizo.Notifications.clearBadge()).resolves.toBe(false);
+
+    await expect(Pushizo.Notifications.getBadgeCount()).resolves.toBe(3);
+    env.native.getBadgeCount.mockImplementationOnce(() => Promise.resolve(null));
+    await expect(Pushizo.Notifications.getBadgeCount()).resolves.toBe(0);
+    env.native.getBadgeCount.mockImplementationOnce(() => Promise.resolve(-2.5));
+    await expect(Pushizo.Notifications.getBadgeCount()).resolves.toBe(0);
+  });
+
+  test('User.setProperty: değer `{ value }` zarfıyla yerel modüle iletilir; null özelliği siler', async () => {
+    const { Pushizo, env } = load();
+    await Pushizo.User.setProperty('plan', 'pro');
+    expect(env.native.setUserProperty).toHaveBeenLastCalledWith('plan', { value: 'pro' });
+    await Pushizo.User.setProperty('age', 34);
+    expect(env.native.setUserProperty).toHaveBeenLastCalledWith('age', { value: 34 });
+    await Pushizo.User.setProperty('vip', false);
+    expect(env.native.setUserProperty).toHaveBeenLastCalledWith('vip', { value: false });
+    await Pushizo.User.setProperty('interests', ['spor', 'müzik', 3]);
+    expect(env.native.setUserProperty).toHaveBeenLastCalledWith('interests', { value: ['spor', 'müzik', 3] });
+    await Pushizo.User.setProperty('address', { city: 'İzmir', geo: { lat: 38.4, tags: ['ev'] } });
+    expect(env.native.setUserProperty).toHaveBeenLastCalledWith('address', { value: { city: 'İzmir', geo: { lat: 38.4, tags: ['ev'] } } });
+    await Pushizo.User.setProperty('plan', null);
+    expect(env.native.setUserProperty).toHaveBeenLastCalledWith('plan', { value: null });
+    await Pushizo.User.setProperty('plan', undefined as never);
+    expect(env.native.setUserProperty).toHaveBeenLastCalledWith('plan', { value: null });
+    expect(env.native.setUserProperty).toHaveBeenCalledTimes(7);
+  });
+
+  test('User.setProperty: geçersiz anahtar ve değer yerel modüle gitmeden reddedilir; yerel INVALID_ARGUMENT iletilir', async () => {
+    const { Pushizo, env } = load();
+    expect(() => Pushizo.User.setProperty(' ', 'x')).toThrow('key');
+    expect(() => Pushizo.User.setProperty('k'.repeat(65), 'x')).toThrow('key');
+    expect(() => Pushizo.User.setProperty(5 as never, 'x')).toThrow('key');
+    expect(() => Pushizo.User.setProperty('n', Number.NaN)).toThrow('value');
+    expect(() => Pushizo.User.setProperty('d', new Date() as never)).toThrow('value');
+    expect(() => Pushizo.User.setProperty('f', (() => 1) as never)).toThrow('value');
+    // İç içe null yerel SDK'larda farklı ele alınır (iOS yok sayar): önceden reddedilir.
+    expect(() => Pushizo.User.setProperty('l', ['a', null] as never)).toThrow('value[1]');
+    expect(() => Pushizo.User.setProperty('o', { a: { b: undefined } } as never)).toThrow('value.a.b');
+    expect(env.native.setUserProperty).not.toHaveBeenCalled();
+
+    env.native.setUserProperty.mockImplementationOnce(() =>
+      Promise.reject(Object.assign(new Error('Özellik anahtarı boş olamaz.'), { code: 'INVALID_ARGUMENT' })),
+    );
+    await expect(Pushizo.User.setProperty('plan', 'pro')).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
+  test('FeatureFlags.addObserver / removeObserver: yerel yenileme olayı gözlemcilere iletilir; abonelik son gözlemcide kapanır', () => {
+    const { Pushizo, env } = load();
+    const first = jest.fn();
+    const second = jest.fn();
+    const unsubscribe = Pushizo.FeatureFlags.addObserver(first);
+    Pushizo.FeatureFlags.addObserver(second);
+    // Aynı gözlemci iki kez eklenmez.
+    Pushizo.FeatureFlags.addObserver(second);
+    expect(env.listenerCount('Pushizo-featureFlagsChange')).toBe(1);
+    expect(env.native.addListener).toHaveBeenCalledWith('Pushizo-featureFlagsChange');
+
+    env.emit('Pushizo-featureFlagsChange', {});
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+
+    unsubscribe();
+    env.emit('Pushizo-featureFlagsChange', {});
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(2);
+    expect(env.listenerCount('Pushizo-featureFlagsChange')).toBe(1);
+    Pushizo.FeatureFlags.removeObserver(second);
+    expect(env.listenerCount('Pushizo-featureFlagsChange')).toBe(0);
+    // Kayıtlı olmayan gözlemciyi kaldırmak zararsızdır.
+    Pushizo.FeatureFlags.removeObserver(second);
+    expect(() => Pushizo.FeatureFlags.addObserver('x' as never)).toThrow('dinleyici');
+  });
+
+  test('Inbox.addObserver / removeObserver: değişim olayı tipli modele çevrilir; itemId yalnızca tek öğe olaylarında bulunur', () => {
+    const { Pushizo, env } = load();
+    const events: unknown[] = [];
+    const observer = (event: unknown) => events.push(event);
+    const unsubscribe = Pushizo.Inbox.addObserver(observer);
+    expect(env.listenerCount('Pushizo-inboxChange')).toBe(1);
+
+    // Android `HsInboxChangeEvent.toMap()` itemId'yi null, iOS `dictionary` hiç göndermez.
+    env.emit('Pushizo-inboxChange', { type: 'listed', itemId: null, unreadCount: 4 });
+    env.emit('Pushizo-inboxChange', { type: 'read', itemId: 'i1', unreadCount: 3 });
+    env.emit('Pushizo-inboxChange', { type: 'read_all', unreadCount: 0 });
+    env.emit('Pushizo-inboxChange', { type: 'archived', itemId: 'i2', unreadCount: 0 });
+    env.emit('Pushizo-inboxChange', { type: 'count', unreadCount: 2.9 });
+    // Tanınmayan tür ve bozuk sayı güvenli varsayılana düşer.
+    env.emit('Pushizo-inboxChange', { type: 'gelecek', itemId: 7, unreadCount: -1 });
+    env.emit('Pushizo-inboxChange', null);
+    expect(events).toEqual([
+      { type: 'listed', unreadCount: 4 },
+      { type: 'read', itemId: 'i1', unreadCount: 3 },
+      { type: 'read_all', unreadCount: 0 },
+      { type: 'archived', itemId: 'i2', unreadCount: 0 },
+      { type: 'count', unreadCount: 2 },
+      { type: 'count', unreadCount: 0 },
+      { type: 'count', unreadCount: 0 },
+    ]);
+
+    unsubscribe();
+    expect(env.listenerCount('Pushizo-inboxChange')).toBe(0);
+    env.emit('Pushizo-inboxChange', { type: 'count', unreadCount: 9 });
+    expect(events).toHaveLength(7);
+    Pushizo.Inbox.addObserver(observer);
+    Pushizo.Inbox.removeObserver(observer);
+    expect(env.listenerCount('Pushizo-inboxChange')).toBe(0);
+    expect(() => Pushizo.Inbox.addObserver(undefined as never)).toThrow('dinleyici');
+  });
+
+  test('Location: izin durumu ve arka plan izni isteği yerel modüle iletilir', async () => {
+    const { Pushizo, env } = load();
+    await expect(Pushizo.Location.permissionGranted()).resolves.toBe(true);
+    await expect(Pushizo.Location.backgroundPermissionGranted()).resolves.toBe(false);
+    await expect(Pushizo.Location.requestBackgroundPermission('Mağazaya yaklaşınca haber verelim')).resolves.toBe(true);
+    expect(env.native.requestBackgroundLocationPermission).toHaveBeenLastCalledWith('Mağazaya yaklaşınca haber verelim');
+    await Pushizo.Location.requestBackgroundPermission('  ');
+    expect(env.native.requestBackgroundLocationPermission).toHaveBeenLastCalledWith(null);
+    // iOS adı aynı izne gider.
+    await expect(Pushizo.Location.requestAlwaysPermission()).resolves.toBe(true);
+    expect(env.native.requestBackgroundLocationPermission).toHaveBeenLastCalledWith(null);
+    await expect(Pushizo.Location.requestBackgroundPermission(5 as never)).rejects.toThrow('rationale');
+    expect(env.native.requestBackgroundLocationPermission).toHaveBeenCalledTimes(3);
+    env.native.requestBackgroundLocationPermission.mockImplementationOnce(() => Promise.resolve(undefined));
+    await expect(Pushizo.Location.requestBackgroundPermission()).resolves.toBe(false);
   });
 
   test('User.getPreferences: boş/eksik yerel sonuç boş listelere düşer; NOT_READY iletilir', async () => {
     const { Pushizo, env } = load();
     env.native.getPreferences.mockImplementationOnce(() => Promise.resolve(null));
-    await expect(Pushizo.User.getPreferences()).resolves.toEqual({ preferences: [], categories: [] });
+    await expect(Pushizo.User.getPreferences()).resolves.toEqual({ preferences: [], categories: [], consents: [] });
     env.native.getPreferences.mockImplementationOnce(() => Promise.resolve({ preferences: 'bozuk', categories: [null, 3] }));
-    await expect(Pushizo.User.getPreferences()).resolves.toEqual({ preferences: [], categories: [] });
+    await expect(Pushizo.User.getPreferences()).resolves.toEqual({ preferences: [], categories: [], consents: [] });
     env.native.getPreferences.mockImplementationOnce(() =>
       Promise.reject(Object.assign(new Error('Abonelik henüz kaydedilmedi'), { code: 'NOT_READY' })),
     );
@@ -445,7 +954,7 @@ describe('Pushizo (React Native)', () => {
     env.emit('Pushizo-notificationClick', {
       notification: { title: 'Kargo', body: 'Yolda', url: null, deliveryId: 'd1', messageId: 'm1', data: { order: '7' }, androidNotificationId: 77 },
       actionId: 'track',
-      url: 'https://example.com/t/7',
+      url: 'https://pushizo.com/t/7',
     });
     expect(listener).toHaveBeenCalledWith({
       notification: {
@@ -458,7 +967,7 @@ describe('Pushizo (React Native)', () => {
         data: { order: '7' },
         androidNotificationId: 77,
       },
-      result: { actionId: 'track', url: 'https://example.com/t/7' },
+      result: { actionId: 'track', url: 'https://pushizo.com/t/7' },
     });
     Pushizo.Notifications.removeEventListener('click', listener);
     expect(env.native.removeListeners).toHaveBeenCalledWith(1);
@@ -579,6 +1088,23 @@ describe('Pushizo (React Native)', () => {
     await expect(Pushizo.Inbox.unreadCount()).resolves.toBe(4);
   });
 
+  test('ContentCards (ADR-0082): akış ayrıştırılır, bilinmeyen tür klasik, olaylar yerel köprüye gider', async () => {
+    const { Pushizo, env } = load();
+    const feed = await Pushizo.ContentCards.list(20);
+    expect(env.native.contentCardsList).toHaveBeenCalledWith(20);
+    expect(feed.unviewedCount).toBe(1);
+    expect(feed.cards[0]).toMatchObject({ id: 'c1', type: 'captioned_image', buttonText: 'İncele', pinned: true, priority: 70 });
+    expect(feed.cards[1]).toMatchObject({ id: 'c2', type: 'classic', viewed: true, priority: 0 });
+    await expect(Pushizo.ContentCards.list(0)).rejects.toThrow('limit');
+    await expect(Pushizo.ContentCards.logClick('c1')).resolves.toMatchObject({ id: 'c1', clicked: true });
+    expect(env.native.contentCardEvent).toHaveBeenLastCalledWith('c1', 'click');
+    await Pushizo.ContentCards.logImpression('c1');
+    expect(env.native.contentCardEvent).toHaveBeenLastCalledWith('c1', 'impression');
+    await Pushizo.ContentCards.dismiss('c1');
+    expect(env.native.contentCardEvent).toHaveBeenLastCalledWith('c1', 'dismiss');
+    await expect(Pushizo.ContentCards.dismiss('')).rejects.toThrow();
+  });
+
   test('Session.sendEvent ve Debug.setLogLevel', () => {
     const { Pushizo, LogLevel, env } = load();
     Pushizo.Session.sendEvent('purchase', { sku: 'a1' }, 49.9);
@@ -586,8 +1112,29 @@ describe('Pushizo (React Native)', () => {
     expect(env.native.sendEvent).toHaveBeenNthCalledWith(1, 'purchase', { sku: 'a1' }, 49.9);
     expect(env.native.sendEvent).toHaveBeenNthCalledWith(2, 'viewed', {}, null);
     expect(() => Pushizo.Session.sendEvent('x', {}, Number.NaN)).toThrow('value');
+    expect(env.native.sendEventWithId).not.toHaveBeenCalled();
     Pushizo.Debug.setLogLevel(LogLevel.Info);
     expect(env.native.setLogLevel).toHaveBeenCalledWith('info');
     expect(() => Pushizo.Debug.setLogLevel('trace' as never)).toThrow('günlük seviyesi');
+  });
+
+  test('Session.sendEvent: eventId verilirse sendEventWithId çağrılır; boş kimlik eski yerel metoda düşer', () => {
+    const { Pushizo, env } = load();
+    Pushizo.Session.sendEvent('purchase', { sku: 'a1' }, 49.9, { eventId: 'order-1001:purchase' });
+    expect(env.native.sendEventWithId).toHaveBeenLastCalledWith('purchase', { sku: 'a1' }, 49.9, 'order-1001:purchase');
+    Pushizo.Session.sendEvent('viewed', undefined, undefined, { eventId: 'evt_12345678' });
+    expect(env.native.sendEventWithId).toHaveBeenLastCalledWith('viewed', {}, null, 'evt_12345678');
+    // Biçimi geçersiz kimlik yerel SDK'ya bırakılır (kendi kimliğini üretir).
+    Pushizo.Session.sendEvent('viewed', {}, undefined, { eventId: 'kısa' });
+    expect(env.native.sendEventWithId).toHaveBeenLastCalledWith('viewed', {}, null, 'kısa');
+    expect(env.native.sendEvent).not.toHaveBeenCalled();
+
+    Pushizo.Session.sendEvent('viewed', {}, 1, {});
+    Pushizo.Session.sendEvent('viewed', {}, 1, { eventId: '' });
+    Pushizo.Session.sendEvent('viewed', {}, 1, { eventId: undefined });
+    expect(env.native.sendEvent).toHaveBeenCalledTimes(3);
+    expect(env.native.sendEvent).toHaveBeenLastCalledWith('viewed', {}, 1);
+    expect(() => Pushizo.Session.sendEvent('viewed', {}, 1, { eventId: 42 as never })).toThrow('eventId');
+    expect(env.native.sendEventWithId).toHaveBeenCalledTimes(3);
   });
 });

@@ -17,6 +17,8 @@ import com.facebook.react.modules.core.PermissionListener
 import com.pushizo.sdk.Pushizo
 import com.pushizo.sdk.HsApiException
 import com.pushizo.sdk.HsCallback
+import com.pushizo.sdk.HsDeliverySetting
+import com.pushizo.sdk.HsInAppMessage
 import com.pushizo.sdk.HsLog
 import com.pushizo.sdk.R
 
@@ -58,6 +60,14 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
 
     fun login(externalId: String, identityHash: String?, jwt: String?, promise: Promise) = guard(promise) {
         Pushizo.login(externalId, identityHash, jwt)
+        promise.resolve(null)
+    }
+
+    fun isInitialized(promise: Promise) = promise.resolve(Pushizo.isInitialized)
+
+    /** Profil alanları yerel SDK'da girişten önce doğrulanır (geçersiz e-posta/telefon `INVALID_ARGUMENT`). */
+    fun loginWithProfile(externalId: String, profile: ReadableMap, identityHash: String?, jwt: String?, promise: Promise) = guard(promise) {
+        Pushizo.login(externalId, profile.toUserProfile(), identityHash, jwt)
         promise.resolve(null)
     }
 
@@ -135,6 +145,32 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
     fun setPreferences(preferences: ReadableArray, promise: Promise) =
         Pushizo.User.setPreferences(preferences.toPreferenceInputs(), reply(promise) { Arguments.makeNativeMap(it.toMap()) })
 
+    /** Reklam kişiselleştirme rızası (ADR-0037); sonuç güncel tercihlerdir. */
+    fun setAdsPersonalizationConsent(granted: Boolean, promise: Promise) =
+        Pushizo.User.setAdsPersonalizationConsent(granted, reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+
+    fun getConsents(promise: Promise) =
+        Pushizo.User.getConsents(reply(promise) { consents -> Arguments.makeNativeArray(consents.map { it.toMap() }) })
+
+    /** Fire OS ADM kayıt kimliği; geçersiz kimlik `INVALID_ARGUMENT`. */
+    fun registerAdm(token: String, promise: Promise) = guard(promise) {
+        Pushizo.User.registerAdm(token)
+        promise.resolve(null)
+    }
+
+    /**
+     * Kullanıcı özelliği: değer `{ value }` zarfıyla gelir (metin, sayı, mantıksal, dizi, nesne; `null` özelliği siler).
+     * Boş anahtar yerel SDK'dan `IllegalArgumentException` → `INVALID_ARGUMENT`.
+     */
+    fun setUserProperty(key: String, property: ReadableMap, promise: Promise) = guard(promise) {
+        Pushizo.User.setProperty(key, property.toHashMap()["value"])
+        promise.resolve(null)
+    }
+
+    // --- Reklam kimliği (ADR-0037) ---
+
+    fun setAdvertisingId(id: String?) = Pushizo.Ads.setAdvertisingId(id)
+
     // --- Push aboneliği ---
 
     fun getPushSubscriptionState(promise: Promise) =
@@ -190,6 +226,17 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
         promise.resolve(null)
     }
 
+    /**
+     * Yerel SDK sayıyı saklar ve sonraki bildirimlere yazar (Android'de standart "rozeti ayarla" API'si yoktur). Sonuç:
+     * rozet bu cihazda gösterilebiliyor mu (Android 8+, bildirimler açık, kanal rozete izin veriyor).
+     */
+    fun setBadgeCount(count: Double, promise: Promise) = guard(promise) {
+        promise.resolve(Pushizo.Notifications.setBadgeCount(count.toInt()))
+    }
+
+    /** `setBadgeCount` ile saklanan son sayı. */
+    fun getBadgeCount(promise: Promise) = promise.resolve(Pushizo.Notifications.badgeCount)
+
     fun setForegroundHandlerEnabled(enabled: Boolean) {
         PushizoBridge.foregroundHandlerEnabled = enabled
     }
@@ -202,6 +249,10 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
 
     fun sendEvent(name: String, properties: ReadableMap, value: Double?) =
         Pushizo.Session.sendEvent(name, properties.toHashMap(), value)
+
+    /** Tekilleştirme kimliğiyle olay; kimlik biçimi geçersizse yerel SDK kendi kimliğini üretir. */
+    fun sendEventWithId(name: String, properties: ReadableMap, value: Double?, eventId: String) =
+        Pushizo.Session.sendEvent(name, properties.toHashMap(), value, eventId)
 
     // --- In-app ---
 
@@ -238,6 +289,19 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
 
     fun inboxUnreadCount(promise: Promise) = Pushizo.Inbox.unreadCount(reply(promise) { it })
 
+    fun contentCardsList(limit: Double, promise: Promise) =
+        Pushizo.ContentCards.list(limit.toInt(), reply(promise) { Arguments.makeNativeMap(it.toMap()) })
+
+    fun contentCardEvent(id: String, event: String, promise: Promise) {
+        val callback = reply<com.pushizo.sdk.HsContentCard>(promise) { Arguments.makeNativeMap(it.toMap()) }
+        when (event) {
+            "impression" -> Pushizo.ContentCards.logImpression(id, callback)
+            "click" -> Pushizo.ContentCards.logClick(id, callback)
+            "dismiss" -> Pushizo.ContentCards.dismiss(id, callback)
+            else -> promise.reject("PUSHIZO_INVALID_ARGUMENT", "Kart olayı impression, click veya dismiss olmalı.")
+        }
+    }
+
     // --- Live Activities: iOS (ActivityKit) özelliğidir; Android'de sessizce yok sayılmaz, açık hatayla reddedilir ---
 
     fun setupDefaultLiveActivity(promise: Promise) = rejectLiveActivities(promise)
@@ -272,6 +336,60 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
             promise.resolve(false)
             return
         }
+        requestWithRationale(
+            R.string.hs_location_rationale_title,
+            R.string.hs_location_rationale_message,
+            rationale,
+            permissions,
+            promise,
+        ) { Pushizo.Location.permissionGranted }
+    }
+
+    fun locationPermissionGranted(promise: Promise) = promise.resolve(Pushizo.Location.permissionGranted)
+
+    fun locationBackgroundPermissionGranted(promise: Promise) = promise.resolve(Pushizo.Location.backgroundPermissionGranted)
+
+    /**
+     * Arka plan konum izni (bölge izleme). Yerel `Location.requestBackgroundPermission(activity)` sonucu bildirmediğinden
+     * akış burada yürütülür: zaten verilmişse `true`; Android 10 öncesinde normal konum izni akışı; manifest'te
+     * `ACCESS_BACKGROUND_LOCATION` yoksa `false`; aksi hâlde açıklama diyaloğu ve sistem izni (Android 11+ Ayarlar ekranı).
+     */
+    fun requestBackgroundLocationPermission(rationale: String?, promise: Promise) {
+        if (Pushizo.Location.backgroundPermissionGranted) {
+            Pushizo.Location.onPermissionResult()
+            promise.resolve(true)
+            return
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            requestLocationPermission(rationale, promise)
+            return
+        }
+        if (!backgroundLocationDeclared()) {
+            HsLog.w("arka plan konum izni istenemedi: uygulama manifest'inde ACCESS_BACKGROUND_LOCATION yok")
+            promise.resolve(false)
+            return
+        }
+        requestWithRationale(
+            R.string.hs_geofence_rationale_title,
+            R.string.hs_geofence_rationale_message,
+            rationale,
+            arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
+            promise,
+        ) { Pushizo.Location.backgroundPermissionGranted }
+    }
+
+    /**
+     * Açıklama diyaloğu, ardından [PermissionAwareActivity] ile sistem izni; sonuçta SDK'ya
+     * [Pushizo.Location.onPermissionResult] bildirilir ve Promise [granted] değeriyle bir kez çözülür.
+     */
+    private fun requestWithRationale(
+        titleRes: Int,
+        messageRes: Int,
+        rationale: String?,
+        permissions: Array<String>,
+        promise: Promise,
+        granted: () -> Boolean,
+    ) {
         val activity = context.currentActivity
         if (activity !is PermissionAwareActivity) {
             promise.reject("NO_ACTIVITY", "İzin istemek için ön planda bir ReactActivity gerekli.")
@@ -279,9 +397,9 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
         }
         val listener = PermissionListener { requestCode, _, _ ->
             if (requestCode != Pushizo.Location.PERMISSION_REQUEST_CODE) return@PermissionListener false
-            // İzin verildiyse ve paylaşım açıksa yerel SDK konumu hemen gönderir.
+            // İzin verildiyse ve paylaşım açıksa yerel SDK konumu hemen gönderir, bölge izlemeyi yeniler.
             Pushizo.Location.onPermissionResult()
-            promise.resolve(Pushizo.Location.permissionGranted)
+            promise.resolve(granted())
             true
         }
         UiThreadUtil.runOnUiThread {
@@ -292,8 +410,8 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
             // "Devam" dışındaki her kapanış (Şimdi değil, geri tuşu, dışına dokunma) reddedilmiş sayılır; Promise bir kez çözülür.
             var proceeding = false
             AlertDialog.Builder(activity)
-                .setTitle(R.string.hs_location_rationale_title)
-                .setMessage(rationale?.takeIf { it.isNotBlank() } ?: activity.getString(R.string.hs_location_rationale_message))
+                .setTitle(titleRes)
+                .setMessage(rationale?.takeIf { it.isNotBlank() } ?: activity.getString(messageRes))
                 .setPositiveButton(R.string.hs_location_rationale_continue) { _, _ ->
                     proceeding = true
                     activity.requestPermissions(permissions, Pushizo.Location.PERMISSION_REQUEST_CODE, listener)
@@ -304,6 +422,12 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
         }
     }
 
+    // --- Arka plan bölge izleme (ADR-0065; varsayılan kapalı). Köprü arka plan konum iznini istemez ve manifest'e eklemez. ---
+
+    fun setGeofencingEnabled(enabled: Boolean) = Pushizo.Location.setGeofencingEnabled(enabled)
+
+    fun isGeofencingEnabled(promise: Promise) = promise.resolve(Pushizo.Location.isGeofencingEnabled)
+
     /** Uygulama manifest'inde tanımlı konum izinleri; yalnızca bunlar çalışma zamanında istenebilir. */
     private fun declaredLocationPermissions(): Array<String> = try {
         val info = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
@@ -312,6 +436,98 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
     } catch (e: PackageManager.NameNotFoundException) {
         HsLog.w("uygulama paket bilgisi okunamadı", e)
         emptyArray()
+    }
+
+    private fun backgroundLocationDeclared(): Boolean = try {
+        val info = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+        Manifest.permission.ACCESS_BACKGROUND_LOCATION in info.requestedPermissions.orEmpty()
+    } catch (e: PackageManager.NameNotFoundException) {
+        HsLog.w("uygulama paket bilgisi okunamadı", e)
+        false
+    }
+
+    // --- Android teslimat güçlendirme (ADR-0092): teşhis, ayar ekranı adayları ve diyalog yerel SDK'dadır ---
+
+    /** SDK başlatılmadıysa `{ supported: false }` (JS katmanı "risk yok" durumuna çevirir). */
+    fun deliveryStatus(promise: Promise) =
+        promise.resolve(Arguments.makeNativeMap(Pushizo.Delivery.status()?.toMap() ?: mapOf("supported" to false)))
+
+    fun deliveryShouldShowGuidance(minIntervalDays: Double, promise: Promise) =
+        promise.resolve(Pushizo.Delivery.shouldShowGuidance(minIntervalDays.toInt()))
+
+    /** Ön planda Activity varsa ekran aynı görevde açılır; yerel çağrı istisna atmaz. */
+    fun deliveryOpenSettings(setting: String, promise: Promise) =
+        promise.resolve(Pushizo.Delivery.openSettings(context.currentActivity ?: context, setting.toDeliverySetting()))
+
+    /** Diyalog ön planda bir Activity ister; yoksa hiçbir şey gösterilmez ve `false` döner. Sonuç bir kez bildirilir. */
+    fun deliveryShowGuidance(setting: String, message: String?, promise: Promise) {
+        val activity = context.currentActivity
+        if (activity == null) {
+            promise.resolve(false)
+            return
+        }
+        Pushizo.Delivery.showGuidance(activity, setting.toDeliverySetting(), message) { opened -> promise.resolve(opened) }
+    }
+
+    /** JS değeri (`auto`, `notifications`, `auto_start`, `battery_optimization`, `app_details`); tanınmayan değer `AUTO`. */
+    private fun String.toDeliverySetting(): HsDeliverySetting =
+        HsDeliverySetting.values().firstOrNull { it.name.equals(this, ignoreCase = true) } ?: HsDeliverySetting.AUTO
+
+    // --- Özellik bayrakları (ADR-0066) ---
+
+    fun featureFlagsRefresh(promise: Promise) = Pushizo.FeatureFlags.refresh { promise.resolve(it) }
+
+    fun featureFlagsIsEnabled(key: String, defaultValue: Boolean, promise: Promise) =
+        promise.resolve(Pushizo.FeatureFlags.isEnabled(key, defaultValue))
+
+    /** Değer `{ value }` zarfıyla döner (metin, sayı, mantıksal, nesne, dizi veya null); varsayılan JS katmanında uygulanır. */
+    fun featureFlagsGetValue(key: String, promise: Promise) = guard(promise) {
+        promise.resolve(Arguments.makeNativeMap(mapOf("value" to Pushizo.FeatureFlags.getValue(key).toBridgeValue())))
+    }
+
+    // --- Gömülü yerleşimler (ADR-0068; SDK geri çağrısı arka plan iş parçacığındadır) ---
+
+    /** Geçersiz anahtar veya `limit` yerel SDK doğrulamasından `INVALID_ARGUMENT` ile reddedilir. */
+    fun placementsList(key: String, limit: Double, promise: Promise) = guard(promise) {
+        Pushizo.Placements.list(key, limit.toInt()) { messages ->
+            guard(promise) {
+                rememberPlacements(messages)
+                promise.resolve(Arguments.makeNativeArray(messages.map { it.toMap() }))
+            }
+        }
+    }
+
+    fun placementsReportImpression(messageId: String) {
+        placementMessage(messageId)?.let { Pushizo.Placements.reportImpression(it) }
+    }
+
+    fun placementsReportClick(messageId: String, buttonId: String) {
+        placementMessage(messageId)?.let { Pushizo.Placements.reportClick(it, buttonId) }
+    }
+
+    fun placementsReportDismiss(messageId: String) {
+        placementMessage(messageId)?.let { Pushizo.Placements.reportDismiss(it) }
+    }
+
+    /**
+     * Rapor çağrıları yerel mesaj nesnesi ister; JS yalnızca kimlik taşır. Son `placementsList` sonuçları kimliğe göre
+     * tutulur, sınır aşılınca en eski kayıt düşer.
+     */
+    private val placementMessages = LinkedHashMap<String, HsInAppMessage>()
+
+    private fun rememberPlacements(messages: List<HsInAppMessage>) = synchronized(placementMessages) {
+        for (message in messages) {
+            placementMessages.remove(message.id)
+            placementMessages[message.id] = message
+        }
+        val overflow = placementMessages.size - MAX_PLACEMENT_MESSAGES
+        if (overflow > 0) placementMessages.keys.take(overflow).forEach { placementMessages.remove(it) }
+    }
+
+    private fun placementMessage(messageId: String): HsInAppMessage? {
+        val message = synchronized(placementMessages) { placementMessages[messageId] }
+        if (message == null) HsLog.d("yerleşim raporu atlandı: mesaj önbellekte yok ($messageId)")
+        return message
     }
 
     // --- Canlı sohbet (ADR-0040) ---
@@ -361,6 +577,22 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
 
     fun chatGetVisitorId(promise: Promise) = promise.resolve(Pushizo.Chat.visitorId)
 
+    fun chatIsListening(promise: Promise) = promise.resolve(Pushizo.Chat.isListening)
+
+    /** Hazır sohbet ekranı ön plandaki Activity'nin görevinde açılır; Activity yoksa uygulama bağlamıyla yeni görevde. */
+    fun chatShow() {
+        try {
+            Pushizo.Chat.show(context.currentActivity ?: context)
+        } catch (e: Exception) {
+            HsLog.w("sohbet ekranı açılamadı", e)
+        }
+    }
+
+    fun chatHide(promise: Promise) = promise.resolve(Pushizo.Chat.hide())
+
+    /** Yerel SDK'da karşılığı yoktur; köprü açık sohbet ekranını Activity yaşam döngüsünden izler. */
+    fun chatIsPresented(promise: Promise) = promise.resolve(PushizoBridge.chatPresented)
+
     // --- Hata ayıklama ---
 
     fun setLogLevel(level: String) = Pushizo.Debug.setLogLevel(logLevel(level))
@@ -397,6 +629,9 @@ class PushizoModuleImpl(private val context: ReactApplicationContext) {
         const val NAME = "Pushizo"
         const val PLATFORM_NOT_SUPPORTED = "PLATFORM_NOT_SUPPORTED"
         const val LIVE_ACTIVITIES_IOS_ONLY = "Live Activities yalnızca iOS'ta desteklenir"
+
+        /** Rapor çağrıları için tutulan yerleşim mesajı sayısı üst sınırı. */
+        private const val MAX_PLACEMENT_MESSAGES = 50
 
         /** Ön plan konum izinleri (yerel SDK ile aynı küme); arka plan konumu istenmez. */
         private val LOCATION_PERMISSIONS = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)

@@ -125,7 +125,7 @@ export function validateProps(input: unknown): ResolvedProps {
     fail(`"logLevel" şunlardan biri olmalı: ${LOG_LEVELS.join(', ')}.`);
   }
   if (props.iosAppGroup !== undefined && !/^group\.[A-Za-z0-9.-]+$/.test(props.iosAppGroup as string)) {
-    fail('"iosAppGroup" "group." ile başlamalı ve yalnızca harf, rakam, nokta, tire içermeli (ör. group.com.example.app).');
+    fail('"iosAppGroup" "group." ile başlamalı ve yalnızca harf, rakam, nokta, tire içermeli (ör. group.com.pushizo.app).');
   }
   if (props.iosDeploymentTarget !== undefined) {
     const match = /^(\d+)(\.\d+)?$/.exec(props.iosDeploymentTarget as string);

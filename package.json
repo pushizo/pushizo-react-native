@@ -1,7 +1,7 @@
 {
   "name": "@pushizo/react-native",
-  "version": "0.1.0",
-  "description": "Pushizo React Native SDK: push aboneliği, kullanıcı/tag, e-posta/SMS, in-app mesajlar, bildirim kutusu ve Expo config plugin (Android + iOS).",
+  "version": "0.3.0",
+  "description": "Pushizo React Native SDK: push aboneliği, kullanıcı/tag, e-posta/SMS, in-app mesajlar, gömülü yerleşimler, özellik bayrakları, bildirim kutusu ve Expo config plugin (Android + iOS).",
   "license": "MIT",
   "author": "Pushizo <bildirim@pushizo.com>",
   "homepage": "https://docs.pushizo.com/docs/sdk/react-native",

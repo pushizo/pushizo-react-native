@@ -15,6 +15,11 @@ export interface Spec extends TurboModule {
   initialize(appId: string, options: Object): Promise<void>;
   setConsentGiven(given: boolean): void;
   login(externalId: string, identityHash: string | null, jwt: string | null): Promise<void>;
+  /** SDK başlatıldı mı (yerel `Pushizo.isInitialized`). */
+  isInitialized(): Promise<boolean>;
+  /** profile: { email, sms, tags, aliases } (hepsi isteğe bağlı); geçersiz e-posta/telefon girişten önce `INVALID_ARGUMENT`. */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  loginWithProfile(externalId: string, profile: Object, identityHash: string | null, jwt: string | null): Promise<void>;
   updateUserJwt(jwt: string): Promise<void>;
   logout(): void;
 
@@ -44,6 +49,21 @@ export interface Spec extends TurboModule {
   /** preferences: [{ category, channel (null = tüm kanallar), optedIn }]; sonuç `getPreferences` ile aynı biçimdedir. */
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
   setPreferences(preferences: Array<Object>): Promise<Object>;
+  /** Reklam kişiselleştirme rızası (ADR-0037); sonuç `getPreferences` ile aynı biçimdedir. */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  setAdsPersonalizationConsent(granted: boolean): Promise<Object>;
+  /** Sonuç: [{ purpose, granted, source, updatedAt }] */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  getConsents(): Promise<Array<Object>>;
+  /** Fire OS ADM kayıt kimliği (yalnızca Android; iOS'ta etkisiz). */
+  registerAdm(token: string): Promise<void>;
+  /** property: `{ value }` zarfı (metin, sayı, mantıksal, dizi, nesne; `null` özelliği siler). Geçersiz anahtar/değer `INVALID_ARGUMENT`. */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  setUserProperty(key: string, property: Object): Promise<void>;
+
+  // --- Reklam kimliği (ADR-0037) ---
+  /** GAID / IDFA; `null` veya sıfır kimlik sunucudaki kaydı siler. */
+  setAdvertisingId(id: string | null): void;
 
   // --- Push aboneliği ---
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
@@ -59,6 +79,13 @@ export interface Spec extends TurboModule {
   removeNotification(id: string): Promise<void>;
   /** Android `android_group`, iOS `thread-id` grubundaki bildirimleri kaldırır. */
   removeGroupedNotifications(group: string): Promise<void>;
+  /**
+   * Uygulama rozeti. iOS: rozet ve NSE ile paylaşılan sayaç ayarlanır (sonuç `true`). Android: sayı saklanır ve sonraki
+   * bildirimlere yazılır; sonuç rozet bu cihazda gösterilebiliyor mu.
+   */
+  setBadgeCount(count: number): Promise<boolean>;
+  /** Android: `setBadgeCount` ile saklanan son sayı; iOS: uygulama simgesindeki rozet sayısı. */
+  getBadgeCount(): Promise<number>;
   setForegroundHandlerEnabled(enabled: boolean): void;
   /** Ön plan olayı için bildirimi gösterir (bir kez). */
   displayNotification(notificationId: string): void;
@@ -68,6 +95,9 @@ export interface Spec extends TurboModule {
   // --- Oturum / olay ---
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
   sendEvent(name: string, properties: Object, value: number | null): void;
+  /** `sendEvent` ile aynı; `eventId` tekilleştirme kimliğidir (geçersiz biçimde yerel SDK kendi kimliğini üretir). */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  sendEventWithId(name: string, properties: Object, value: number | null, eventId: string): void;
 
   // --- In-app ---
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
@@ -88,6 +118,12 @@ export interface Spec extends TurboModule {
   inboxMarkAllRead(): Promise<number>;
   inboxArchive(id: string): Promise<void>;
   inboxUnreadCount(): Promise<number>;
+
+  // --- İçerik kartları (ADR-0082) ---
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır.
+  contentCardsList(limit: number): Promise<Object>;
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır.
+  contentCardEvent(id: string, event: string): Promise<Object>;
 
   // --- Canlı sohbet (ADR-0040) ---
   /** Sonuç: { userId, conversation } */
@@ -118,6 +154,14 @@ export interface Spec extends TurboModule {
   chatStopListening(): void;
   chatAttachmentUrl(attachmentId: string, download: boolean): Promise<string>;
   chatGetVisitorId(): Promise<string | null>;
+  /** Gerçek zamanlı akış açık mı. */
+  chatIsListening(): Promise<boolean>;
+  /** Hazır sohbet ekranını açar (Android `HsChatActivity`, iOS `HSChatViewController`); SDK başlatılmadıysa etkisiz. */
+  chatShow(): void;
+  /** Hazır sohbet ekranını kapatır; sonuç: kapatılacak açık bir ekran var mıydı. */
+  chatHide(): Promise<boolean>;
+  /** Hazır sohbet ekranı şu an açık mı. */
+  chatIsPresented(): Promise<boolean>;
 
   // --- Live Activities (yalnızca iOS 16.1+; Android `PLATFORM_NOT_SUPPORTED` ile reddeder) ---
   /** Genel `PushizoDefaultLiveActivityAttributes` türünü izlemeye alır (push-to-start ve güncelleme belirteçleri). */
@@ -133,6 +177,44 @@ export interface Spec extends TurboModule {
   isLocationShared(): Promise<boolean>;
   /** Açıklama diyaloğu (null → SDK'nın yerelleştirilmiş metni) ve "kullanırken" konum izni; sonuç: izin var/verildi mi. */
   requestLocationPermission(rationale: string | null): Promise<boolean>;
+  /** Yaklaşık veya hassas ("kullanırken" ya da "her zaman") konum izni verilmiş mi. */
+  locationPermissionGranted(): Promise<boolean>;
+  /** Arka plan ("her zaman") konum izni verilmiş mi. */
+  locationBackgroundPermissionGranted(): Promise<boolean>;
+  /** Arka plan konum izni: Android `ACCESS_BACKGROUND_LOCATION` (açıklama diyaloğuyla), iOS "her zaman" (rationale yok sayılır). */
+  requestBackgroundLocationPermission(rationale: string | null): Promise<boolean>;
+
+  // --- Arka plan bölge izleme (ADR-0065; varsayılan kapalı, köprü izin istemez) ---
+  setGeofencingEnabled(enabled: boolean): void;
+  /** Bölge izleme tercihi (kalıcı; izin durumundan bağımsız). */
+  isGeofencingEnabled(): Promise<boolean>;
+
+  // --- Android teslimat güçlendirme (ADR-0092; iOS'ta durum `{ supported: false }`, diğerleri etkisiz `false`) ---
+  /** Sonuç: { supported, manufacturer, brand, vendor, aggressiveVendor, rom, romVersion, notificationsEnabled, channelBlocked, batteryOptimizationExempt, backgroundRestricted, standbyBucket, powerSaveMode, dataSaverEnabled, restricted, risk, recommendedSettings } */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  deliveryStatus(): Promise<Object>;
+  /** Risk var ve hazır diyalog son `minIntervalDays` günde gösterilmedi mi. */
+  deliveryShouldShowGuidance(minIntervalDays: number): Promise<boolean>;
+  /** setting: `auto`, `notifications`, `auto_start`, `battery_optimization`, `app_details`; sonuç: bir ayar ekranı açıldı mı. */
+  deliveryOpenSettings(setting: string): Promise<boolean>;
+  /** Hazır açıklama diyaloğu (message null → SDK'nın yerelleştirilmiş metni); sonuç: kullanıcı kabul etti ve ayar ekranı açıldı mı. */
+  deliveryShowGuidance(setting: string, message: string | null): Promise<boolean>;
+
+  // --- Özellik bayrakları (ADR-0066) ---
+  /** Değerleri hemen yeniler; sonuç: yenileme başarılı mı. */
+  featureFlagsRefresh(): Promise<boolean>;
+  featureFlagsIsEnabled(key: string, defaultValue: boolean): Promise<boolean>;
+  /** Sonuç: { value } (metin, sayı, mantıksal, nesne, dizi veya null); varsayılan JS katmanında uygulanır. */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  featureFlagsGetValue(key: string): Promise<Object>;
+
+  // --- Gömülü yerleşimler (ADR-0068) ---
+  /** Sonuç: in-app mesaj haritaları (`types.ts` → `InAppMessage`); yerel katman rapor çağrıları için mesajları kimliğe göre önbelleğe alır. */
+  // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types -- codegen yalnızca `Object` (GenericObjectTypeAnnotation) tanır; `object`/Record ayrıştırılamaz.
+  placementsList(key: string, limit: number): Promise<Array<Object>>;
+  placementsReportImpression(messageId: string): void;
+  placementsReportClick(messageId: string, buttonId: string): void;
+  placementsReportDismiss(messageId: string): void;
 
   // --- Hata ayıklama ---
   setLogLevel(level: string): void;

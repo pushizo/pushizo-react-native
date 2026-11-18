@@ -247,6 +247,16 @@ class PushizoModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
     }
 
     @ReactMethod
+    fun contentCardsList(limit: Double, promise: Promise) {
+        impl.contentCardsList(limit, promise)
+    }
+
+    @ReactMethod
+    fun contentCardEvent(id: String, event: String, promise: Promise) {
+        impl.contentCardEvent(id, event, promise)
+    }
+
+    @ReactMethod
     fun chatStart(name: String?, email: String?, language: String?, promise: Promise) {
         impl.chatStart(name, email, language, promise)
     }
@@ -349,6 +359,156 @@ class PushizoModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
     @ReactMethod
     fun requestLocationPermission(rationale: String?, promise: Promise) {
         impl.requestLocationPermission(rationale, promise)
+    }
+
+    @ReactMethod
+    fun setGeofencingEnabled(enabled: Boolean) {
+        impl.setGeofencingEnabled(enabled)
+    }
+
+    @ReactMethod
+    fun isGeofencingEnabled(promise: Promise) {
+        impl.isGeofencingEnabled(promise)
+    }
+
+    @ReactMethod
+    fun deliveryStatus(promise: Promise) {
+        impl.deliveryStatus(promise)
+    }
+
+    @ReactMethod
+    fun deliveryShouldShowGuidance(minIntervalDays: Double, promise: Promise) {
+        impl.deliveryShouldShowGuidance(minIntervalDays, promise)
+    }
+
+    @ReactMethod
+    fun deliveryOpenSettings(setting: String, promise: Promise) {
+        impl.deliveryOpenSettings(setting, promise)
+    }
+
+    @ReactMethod
+    fun deliveryShowGuidance(setting: String, message: String?, promise: Promise) {
+        impl.deliveryShowGuidance(setting, message, promise)
+    }
+
+    @ReactMethod
+    fun featureFlagsRefresh(promise: Promise) {
+        impl.featureFlagsRefresh(promise)
+    }
+
+    @ReactMethod
+    fun featureFlagsIsEnabled(key: String, defaultValue: Boolean, promise: Promise) {
+        impl.featureFlagsIsEnabled(key, defaultValue, promise)
+    }
+
+    @ReactMethod
+    fun featureFlagsGetValue(key: String, promise: Promise) {
+        impl.featureFlagsGetValue(key, promise)
+    }
+
+    @ReactMethod
+    fun placementsList(key: String, limit: Double, promise: Promise) {
+        impl.placementsList(key, limit, promise)
+    }
+
+    @ReactMethod
+    fun placementsReportImpression(messageId: String) {
+        impl.placementsReportImpression(messageId)
+    }
+
+    @ReactMethod
+    fun placementsReportClick(messageId: String, buttonId: String) {
+        impl.placementsReportClick(messageId, buttonId)
+    }
+
+    @ReactMethod
+    fun placementsReportDismiss(messageId: String) {
+        impl.placementsReportDismiss(messageId)
+    }
+
+    @ReactMethod
+    fun isInitialized(promise: Promise) {
+        impl.isInitialized(promise)
+    }
+
+    @ReactMethod
+    fun loginWithProfile(externalId: String, profile: ReadableMap, identityHash: String?, jwt: String?, promise: Promise) {
+        impl.loginWithProfile(externalId, profile, identityHash, jwt, promise)
+    }
+
+    @ReactMethod
+    fun setAdsPersonalizationConsent(granted: Boolean, promise: Promise) {
+        impl.setAdsPersonalizationConsent(granted, promise)
+    }
+
+    @ReactMethod
+    fun getConsents(promise: Promise) {
+        impl.getConsents(promise)
+    }
+
+    @ReactMethod
+    fun registerAdm(token: String, promise: Promise) {
+        impl.registerAdm(token, promise)
+    }
+
+    @ReactMethod
+    fun setAdvertisingId(id: String?) {
+        impl.setAdvertisingId(id)
+    }
+
+    @ReactMethod
+    fun setBadgeCount(count: Double, promise: Promise) {
+        impl.setBadgeCount(count, promise)
+    }
+
+    @ReactMethod
+    fun getBadgeCount(promise: Promise) {
+        impl.getBadgeCount(promise)
+    }
+
+    @ReactMethod
+    fun setUserProperty(key: String, property: ReadableMap, promise: Promise) {
+        impl.setUserProperty(key, property, promise)
+    }
+
+    @ReactMethod
+    fun sendEventWithId(name: String, properties: ReadableMap, value: Dynamic, eventId: String) {
+        impl.sendEventWithId(name, properties, value.numberOrNull(), eventId)
+    }
+
+    @ReactMethod
+    fun chatShow() {
+        impl.chatShow()
+    }
+
+    @ReactMethod
+    fun chatHide(promise: Promise) {
+        impl.chatHide(promise)
+    }
+
+    @ReactMethod
+    fun chatIsPresented(promise: Promise) {
+        impl.chatIsPresented(promise)
+    }
+
+    @ReactMethod
+    fun chatIsListening(promise: Promise) {
+        impl.chatIsListening(promise)
+    }
+
+    @ReactMethod
+    fun locationPermissionGranted(promise: Promise) {
+        impl.locationPermissionGranted(promise)
+    }
+
+    @ReactMethod
+    fun locationBackgroundPermissionGranted(promise: Promise) {
+        impl.locationBackgroundPermissionGranted(promise)
+    }
+
+    @ReactMethod
+    fun requestBackgroundLocationPermission(rationale: String?, promise: Promise) {
+        impl.requestBackgroundLocationPermission(rationale, promise)
     }
 
     @ReactMethod

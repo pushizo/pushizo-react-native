@@ -2,18 +2,34 @@ import { EventHub } from './events';
 import { Chat } from './chat';
 import {
   type RawMap,
+  toFeatureFlagValue,
+  toInAppMessages,
+  toContentCard,
+  toContentCardFeed,
+  toDeliveryStatus,
+  toInboxChangeEvent,
   toInboxItem,
   toInboxPage,
   toNotification,
   toStringArray,
   toStringMap,
   toSubscriptionState,
+  toUserConsents,
   toUserPreferences,
 } from './mappers';
 import { nativeModule } from './native';
 import {
+  type FeatureFlagValue,
+  type InAppMessage,
   type InAppMessageClickEvent,
   type InAppMessageLifecycleEvent,
+  type ContentCard,
+  type ContentCardFeed,
+  type DeliveryGuidanceOptions,
+  type DeliverySetting,
+  DeliverySettings,
+  type DeliveryStatus,
+  type InboxChangeEvent,
   type InboxItem,
   type InboxListOptions,
   type InboxPage,
@@ -25,11 +41,16 @@ import {
   type NotificationData,
   NativeEvents,
   type PermissionChangeEvent,
+  type PlacementListOptions,
   type PreferenceChannel,
   PreferenceChannels,
   type PreferenceInput,
   type PushSubscriptionChangedState,
+  type SendEventOptions,
+  type UserConsent,
   type UserPreferences,
+  type UserProfile,
+  type UserPropertyValue,
 } from './types';
 
 const LOG_LEVELS: readonly string[] = Object.values(LogLevel);
@@ -56,6 +77,45 @@ function requireStringArray(value: unknown, name: string): string[] {
     throw new TypeError(`Pushizo: ${name} metin dizisi olmalı.`);
   }
   return value as string[];
+}
+
+/** `login` profili: yalnızca verilen alanlar yerel katmana gider; tip hataları girişten önce fırlatılır. */
+function requireUserProfile(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Pushizo: profile bir nesne olmalı.');
+  const { email, sms, tags, aliases } = value as UserProfile;
+  const out: Record<string, unknown> = {};
+  if (email !== undefined && email !== null) out.email = requireNonEmpty(email, 'profile.email');
+  if (sms !== undefined && sms !== null) out.sms = requireNonEmpty(sms, 'profile.sms');
+  if (tags !== undefined && tags !== null) out.tags = requireStringMap(tags, 'profile.tags');
+  if (aliases !== undefined && aliases !== null) out.aliases = requireStringMap(aliases, 'profile.aliases');
+  return out;
+}
+
+const MAX_PROPERTY_KEY_LENGTH = 64;
+
+/** Kullanıcı özelliği anahtarı: boş olmayan, en çok 64 karakter (yerel iOS SDK ile aynı sınır). */
+function requirePropertyKey(value: unknown): string {
+  if (typeof value !== 'string' || value.trim() === '' || value.trim().length > MAX_PROPERTY_KEY_LENGTH) {
+    throw new TypeError(`Pushizo: key 1-${MAX_PROPERTY_KEY_LENGTH} karakterlik bir metin olmalı.`);
+  }
+  return value;
+}
+
+/**
+ * Kullanıcı özelliği değeri: metin, sonlu sayı, mantıksal ya da bunların dizisi/düz nesnesi. İç içe `null`, fonksiyon,
+ * `Date` gibi değerler yerel SDK'larda farklı ele alındığından (iOS yok sayar) çağrıdan önce reddedilir.
+ */
+function requirePropertyValue(value: unknown, name: string): UserPropertyValue {
+  if (typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (Array.isArray(value)) return value.map((item: unknown, index) => requirePropertyValue(item, `${name}[${index}]`));
+  const proto: unknown = value !== null && typeof value === 'object' ? Object.getPrototypeOf(value) : undefined;
+  if (proto === Object.prototype || proto === null) {
+    const out: Record<string, UserPropertyValue> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) out[key] = requirePropertyValue(item, `${name}.${key}`);
+    return out;
+  }
+  throw new TypeError(`Pushizo: ${name} metin, sonlu sayı, mantıksal değer, dizi veya düz nesne olmalı.`);
 }
 
 const MAX_PREFERENCES = 100;
@@ -112,6 +172,17 @@ function requireLiveActivityValues(value: unknown, name: string, reservedKey?: s
     out[key] = item;
   }
   return out;
+}
+
+/** Yerleşim anahtarı (yerel SDK ve sunucu kuralı): küçük harfle başlar; küçük harf, rakam ve `_ . -`; en çok 64 karakter. */
+const PLACEMENT_KEY = /^[a-z][a-z0-9_.-]{0,63}$/;
+const MAX_PLACEMENT_LIMIT = 10;
+
+/** `Placements.list` sonucundaki mesajın kimliği (rapor çağrıları yerel önbellekte kimlikle eşlenir). */
+function requireMessageId(message: unknown): string {
+  const id = message !== null && typeof message === 'object' ? (message as { id?: unknown }).id : undefined;
+  if (typeof id !== 'string' || id === '') throw new TypeError('Pushizo: message, Placements.list sonucundan bir mesaj olmalı.');
+  return id;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -243,6 +314,11 @@ const inAppLifecycleHub = new EventHub<InAppLifecyclePayload, InAppLifecyclePayl
     }
   },
 });
+/** Özellik bayrağı değerleri sunucudan yenilendi (yük taşımaz). */
+const featureFlagsHub = new EventHub<unknown, void>(NativeEvents.FeatureFlagsChange, () => undefined);
+
+const inboxHub = new EventHub<RawMap, InboxChangeEvent>(NativeEvents.InboxChange, toInboxChangeEvent);
+
 /** İzin önbelleği için izin olayı bir kez (initialize'da) içeride dinlenir. */
 let permissionRetained = false;
 
@@ -385,7 +461,57 @@ const User = {
       .setPreferences(inputs)
       .then((raw) => toUserPreferences(raw as RawMap));
   },
+  /**
+   * Reklam kişiselleştirme rızası (ADR-0037): `true` iken kullanıcının e-posta/telefon özeti app'in bağladığı reklam
+   * platformlarının kitlelerine gönderilebilir; `false` rızayı geri alır (sonraki kitle senkronunda çıkarılır). Güncel
+   * tercihleri döndürür.
+   */
+  async setAdsPersonalizationConsent(granted: boolean): Promise<UserPreferences> {
+    if (typeof granted !== 'boolean') throw new TypeError('Pushizo: granted mantıksal değer olmalı.');
+    return toUserPreferences((await nativeModule().setAdsPersonalizationConsent(granted)) as RawMap);
+  },
+  /** Rıza kayıtları (`ads_personalization` …). Abonelik henüz kaydedilmediyse `NOT_READY` koduyla reddedilir. */
+  async getConsents(): Promise<UserConsent[]> {
+    return toUserConsents(await nativeModule().getConsents());
+  },
+  /**
+   * Fire OS ADM kayıt kimliği (yalnızca Android; ana FCM aboneliğinin yerine geçmez). ADM kaydını kendisi yapan
+   * uygulamalar içindir. Geçersiz kimlik `INVALID_ARGUMENT` ile reddedilir; iOS'ta etkisizdir.
+   */
+  registerAdm(token: string): Promise<void> {
+    return nativeModule().registerAdm(requireNonEmpty(token, 'token'));
+  },
+  /**
+   * Kullanıcı özelliği yazar (ör. `setProperty('plan', 'pro')`); `null` özelliği siler. Değer metin, sonlu sayı,
+   * mantıksal ya da bunların dizisi/düz nesnesi olabilir; anahtar 1-64 karakterdir. Çevrimdışıyken yerel SDK kuyruğunda
+   * bekler. Geçersiz anahtar/değer çağrıdan önce `TypeError`, yerel doğrulamada `INVALID_ARGUMENT` ile reddedilir.
+   */
+  setProperty(key: string, value: UserPropertyValue | null): Promise<void> {
+    const name = requirePropertyKey(key);
+    const property = value === null || value === undefined ? null : requirePropertyValue(value, 'value');
+    return nativeModule().setUserProperty(name, { value: property });
+  },
 };
+
+/**
+ * Mobil reklam kimliği (GAID / IDFA; ADR-0037). SDK reklam kitaplığı ve ATT istemi içermez: kimliği uygulama alır ve
+ * verir. Kimlik yalnızca `ads_personalization` rızası olan kullanıcıda ve SHA-256 özetiyle reklam kitlesine gönderilir.
+ */
+const Ads = {
+  /** Reklam kimliğini yazar; `null`, boş metin veya sıfır kimlik sunucudaki kaydı siler. */
+  setAdvertisingId(id: string | null): void {
+    if (id !== null && id !== undefined && typeof id !== 'string') throw new TypeError('Pushizo: id metin veya null olmalı.');
+    nativeModule().setAdvertisingId(typeof id === 'string' && id.trim() !== '' ? id : null);
+  },
+};
+
+/** Rozet çağrısının sonucu beklenmeyebilir (eski `void` kullanım); bu yüzden Promise hiçbir zaman reddedilmez. */
+function applyBadgeCount(count: number): Promise<boolean> {
+  return Promise.resolve(nativeModule().setBadgeCount(count)).then(
+    (shown) => shown === true,
+    () => false,
+  );
+}
 
 const Notifications = {
   /** Sistem bildirim iznini ister; sonuç izin verildi mi. */
@@ -421,6 +547,25 @@ const Notifications = {
   /** Aynı gruptaki bildirimleri kaldırır (Android `android_group`, iOS `thread-id`). */
   removeGroupedNotifications(group: string): Promise<void> {
     return nativeModule().removeGroupedNotifications(requireNonEmpty(group, 'group'));
+  },
+  /**
+   * Uygulama rozetini ayarlar. iOS: rozet ve bildirim servis uzantısıyla paylaşılan sayaç ayarlanır; sonuç `true`.
+   * Android: başlatıcı rozeti için standart bir "sayıyı ayarla" API'si olmadığından yerel SDK sayıyı saklar ve bundan
+   * sonra gösterdiği bildirimlere yazar; sonuç, rozet bu cihazda gösterilebiliyorsa `true` (Android 8 öncesinde,
+   * bildirimler kapalıyken, kanal rozeti kapatıldıysa ya da SDK başlatılmadıysa `false`). Sonucu beklemek zorunlu değildir.
+   */
+  setBadgeCount(count: number): Promise<boolean> {
+    if (!Number.isInteger(count) || count < 0) throw new RangeError('Pushizo: count negatif olmayan tam sayı olmalı.');
+    return applyBadgeCount(count);
+  },
+  /** Rozeti sıfırlar (`setBadgeCount(0)`); Android'de tepsideki bildirimleri kaldırmak için `clearAll`. */
+  clearBadge(): Promise<boolean> {
+    return applyBadgeCount(0);
+  },
+  /** Android: `setBadgeCount` ile saklanan son sayı; iOS: uygulama simgesindeki rozet sayısı. */
+  async getBadgeCount(): Promise<number> {
+    const count = await nativeModule().getBadgeCount();
+    return typeof count === 'number' && Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
   },
   addEventListener<K extends keyof NotificationEventMap>(event: K, listener: (e: NotificationEventMap[K]) => void): void {
     const hub = notificationHubs[event] as unknown as EventHub<unknown, NotificationEventMap[K]> | undefined;
@@ -489,6 +634,68 @@ const InAppMessages = {
   },
 };
 
+/**
+ * Gömülü yerleşimler (ADR-0068): uygulamanın ayırdığı alana içerik. Model döner, çizim uygulamanındır; içerik ekrana
+ * gelince `reportImpression` çağrılır. Rapor çağrıları yerel SDK'nın kalıcı kuyruğuyla gider.
+ */
+const Placements = {
+  /**
+   * Alanın içeriği (önceliğe göre sıralı). Abonelik yoksa veya gizlilik onayı bekleniyorsa boş döner. `limit` 1-10
+   * (varsayılan 1); sayı ya da `{ limit }` olarak verilebilir.
+   */
+  async list(key: string, limit: number | PlacementListOptions = 1): Promise<InAppMessage[]> {
+    if (typeof key !== 'string' || !PLACEMENT_KEY.test(key)) throw new TypeError('Pushizo: geçersiz yerleşim anahtarı.');
+    const count = typeof limit === 'number' ? limit : (limit?.limit ?? 1);
+    if (!Number.isInteger(count) || count < 1 || count > MAX_PLACEMENT_LIMIT) {
+      throw new RangeError(`Pushizo: limit 1-${MAX_PLACEMENT_LIMIT} arası tam sayı olmalı.`);
+    }
+    return toInAppMessages(await nativeModule().placementsList(key, count));
+  },
+  /** İçerik ekrana çizildiğinde çağrılır (gösterim liste alınınca değil, çizilince sayılır). */
+  reportImpression(message: InAppMessage): void {
+    nativeModule().placementsReportImpression(requireMessageId(message));
+  },
+  /** Düğme tıklaması; `buttonId` mesajdaki düğmenin `id` değeridir (`message.display.buttons`). */
+  reportClick(message: InAppMessage, buttonId: string): void {
+    nativeModule().placementsReportClick(requireMessageId(message), requireNonEmpty(buttonId, 'buttonId'));
+  },
+  /** Kullanıcı içeriği kapattığında çağrılır. */
+  reportDismiss(message: InAppMessage): void {
+    nativeModule().placementsReportDismiss(requireMessageId(message));
+  },
+};
+
+/**
+ * Özellik bayrakları (ADR-0066): değerler oturum başında yenilenir ve cihazda saklanır. Ağ yoksa son değer, hiç
+ * alınmadıysa verilen varsayılan döner.
+ */
+const FeatureFlags = {
+  /** Değerleri hemen yeniler; sonuç yenileme başarılı mı (hata veya bekleyen gizlilik onayı `false`, son değerler korunur). */
+  async refresh(): Promise<boolean> {
+    return (await nativeModule().featureFlagsRefresh()) === true;
+  },
+  /** Bayrak bu kullanıcı için açık mı; değer henüz yoksa `defaultValue`. */
+  async isEnabled(key: string, defaultValue = false): Promise<boolean> {
+    return (await nativeModule().featureFlagsIsEnabled(requireNonEmpty(key, 'key'), defaultValue === true)) === true;
+  },
+  /** Bayrağın değeri (metin, sayı, mantıksal, nesne veya dizi); değer yoksa `defaultValue`. */
+  async getValue<T extends FeatureFlagValue = FeatureFlagValue>(key: string, defaultValue: T | null = null): Promise<T | null> {
+    const value = toFeatureFlagValue((await nativeModule().featureFlagsGetValue(requireNonEmpty(key, 'key'))) as RawMap);
+    return value === undefined ? defaultValue : (value as T);
+  },
+  /**
+   * Bayrak değerleri sunucudan her yenilendiğinde (oturum başı ve `refresh()`) çağrılır; güncel değerler `isEnabled` /
+   * `getValue` ile okunur. Dönen fonksiyon gözlemciyi kaldırır.
+   */
+  addObserver(listener: () => void): () => void {
+    featureFlagsHub.add(listener);
+    return () => featureFlagsHub.remove(listener);
+  },
+  removeObserver(listener: () => void): void {
+    featureFlagsHub.remove(listener);
+  },
+};
+
 const Inbox = {
   /** Öğeler (yeniden eskiye), okunmamış sayısı ve sonraki sayfa imleci. */
   async list(options: InboxListOptions = {}): Promise<InboxPage> {
@@ -511,14 +718,58 @@ const Inbox = {
   unreadCount(): Promise<number> {
     return nativeModule().inboxUnreadCount();
   },
+  /**
+   * Kutu değişim gözlemcisi (rozet güncellemek için): `listed` / `count` yalnızca okunmamış sayısı değiştiğinde,
+   * `read` / `read_all` / `archived` her işlemde bildirilir. Dönen fonksiyon gözlemciyi kaldırır.
+   */
+  addObserver(listener: (event: InboxChangeEvent) => void): () => void {
+    inboxHub.add(listener);
+    return () => inboxHub.remove(listener);
+  },
+  removeObserver(listener: (event: InboxChangeEvent) => void): void {
+    inboxHub.remove(listener);
+  },
+};
+
+/** İçerik kartları (ADR-0082): kalıcı kart akışı; kartlar bildirim kutusu listesinde görünmez. */
+const ContentCards = {
+  /** Kart akışı (sabitlenmiş → öncelik → yeni; `limit` 1-100, varsayılan 50). */
+  async list(limit = 50): Promise<ContentCardFeed> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new RangeError('Pushizo: limit 1-100 arası tam sayı olmalı.');
+    return toContentCardFeed((await nativeModule().contentCardsList(limit)) as RawMap);
+  },
+  /** Kart ekranda gösterildi (ilk gösterim kaydedilir). */
+  async logImpression(id: string): Promise<ContentCard> {
+    return toContentCard((await nativeModule().contentCardEvent(requireNonEmpty(id, 'id'), 'impression')) as RawMap);
+  },
+  /** Karta tıklandı (gösterim ve okundu da sayılır). */
+  async logClick(id: string): Promise<ContentCard> {
+    return toContentCard((await nativeModule().contentCardEvent(requireNonEmpty(id, 'id'), 'click')) as RawMap);
+  },
+  /** Kart kapatıldı; akıştan kalkar. */
+  async dismiss(id: string): Promise<ContentCard> {
+    return toContentCard((await nativeModule().contentCardEvent(requireNonEmpty(id, 'id'), 'dismiss')) as RawMap);
+  },
 };
 
 const Session = {
-  /** Özel olay / outcome; adı in-app `event` tetiklerini de çalıştırır. */
-  sendEvent(name: string, properties: Record<string, unknown> = {}, value?: number): void {
+  /**
+   * Özel olay / outcome; adı in-app `event` tetiklerini de çalıştırır. `options.eventId` tekilleştirme kimliğidir
+   * (8-64 karakter; harf, rakam ve `. _ : -`): reklam pikseliyle aynı kimlik verilirse sunucu olayı bir kez sayar.
+   * Biçimi geçersiz kimlikte yerel SDK kendi kimliğini üretir.
+   */
+  sendEvent(name: string, properties: Record<string, unknown> = {}, value?: number, options?: SendEventOptions): void {
     requireNonEmpty(name, 'name');
-    if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value))) {
+    if (value !== undefined && value !== null && (typeof value !== 'number' || !Number.isFinite(value))) {
       throw new TypeError('Pushizo: value sonlu bir sayı olmalı.');
+    }
+    const eventId: unknown = options?.eventId;
+    if (eventId !== undefined && eventId !== null && typeof eventId !== 'string') {
+      throw new TypeError('Pushizo: eventId metin olmalı.');
+    }
+    if (typeof eventId === 'string' && eventId !== '') {
+      nativeModule().sendEventWithId(name, properties ?? {}, value ?? null, eventId);
+      return;
     }
     nativeModule().sendEvent(name, properties ?? {}, value ?? null);
   },
@@ -555,9 +806,10 @@ const LiveActivities = {
 };
 
 /**
- * Konum paylaşımı (v2 Faz 17b; yalnızca ön plan, arka plan konumu yok). Paylaşım açık ve izin verilmişken yerel SDK,
- * oturum başında ve uygulama ön plana döndüğünde en sık 5 dakikada bir konumu push aboneliğine yazar. İzin yoksa veya
- * gizlilik onayı verilmemişse hiçbir şey gönderilmez. İlk konum sunucuda KVKK açık rıza kaydı sayılır.
+ * Konum paylaşımı (v2 Faz 17b; yalnızca ön plan, arka planda koordinat toplanmaz; bölge izleme için
+ * `setGeofencingEnabled`). Paylaşım açık ve izin verilmişken yerel SDK, oturum başında ve uygulama ön plana döndüğünde
+ * en sık 5 dakikada bir konumu push aboneliğine yazar. İzin yoksa veya gizlilik onayı verilmemişse hiçbir şey
+ * gönderilmez. İlk konum sunucuda KVKK açık rıza kaydı sayılır.
  */
 const Location = {
   /** Paylaşımı açar/kapatır (kalıcı tercih). `false` sunucudaki konumu ve rıza kaydını sildirir. */
@@ -580,6 +832,89 @@ const Location = {
     const text = typeof rationale === 'string' && rationale.trim() !== '' ? rationale : null;
     return (await nativeModule().requestLocationPermission(text)) === true;
   },
+  /** Yaklaşık veya hassas konum izni ("kullanırken" ya da "her zaman") verilmiş mi. */
+  async permissionGranted(): Promise<boolean> {
+    return (await nativeModule().locationPermissionGranted()) === true;
+  },
+  /** Arka plan ("her zaman") konum izni verilmiş mi (bölge izleme için gerekir). */
+  async backgroundPermissionGranted(): Promise<boolean> {
+    return (await nativeModule().locationBackgroundPermissionGranted()) === true;
+  },
+  /**
+   * Arka plan konum iznini ister (bölge izleme için). Android: önce açıklama diyaloğu (`rationale`, verilmezse SDK'nın
+   * yerelleştirilmiş metni), sonra `ACCESS_BACKGROUND_LOCATION` (Android 11+ sistem Ayarlar ekranını açar; Android 9 ve
+   * öncesinde normal konum izni yeterlidir). iOS: "her zaman" izni (`rationale` yok sayılır). Önce `requestPermission`
+   * ile ön plan izni alınmış olmalıdır. Sonuç: izin var mı / verildi mi; manifest/Info.plist'te izin tanımlı değilse `false`.
+   */
+  async requestBackgroundPermission(rationale?: string): Promise<boolean> {
+    if (rationale !== undefined && rationale !== null && typeof rationale !== 'string') {
+      throw new TypeError('Pushizo: rationale metin olmalı.');
+    }
+    const text = typeof rationale === 'string' && rationale.trim() !== '' ? rationale : null;
+    return (await nativeModule().requestBackgroundLocationPermission(text)) === true;
+  },
+  /** `requestBackgroundPermission` ile aynı izin (iOS adıyla): iOS "her zaman", Android arka plan konum izni. */
+  requestAlwaysPermission(): Promise<boolean> {
+    return Location.requestBackgroundPermission();
+  },
+  /**
+   * Arka plan bölge izlemeyi açar/kapatır (ADR-0065; kalıcı tercih, varsayılan kapalı). İzlemeyi işletim sistemi yapar;
+   * sunucuya koordinat gitmez, yalnızca bölgeye giriş ve çıkış bildirilir. `setShared(true)` açık olmalı ve arka plan
+   * ("her zaman") konum izni verilmiş olmalıdır; köprü bu izni istemez ve manifest/Info.plist'e eklemez.
+   */
+  setGeofencingEnabled(enabled: boolean): void {
+    nativeModule().setGeofencingEnabled(enabled === true);
+  },
+  /** Bölge izleme açık mı (kalıcı tercih; izin durumundan bağımsız). */
+  async isGeofencingEnabled(): Promise<boolean> {
+    return (await nativeModule().isGeofencingEnabled()) === true;
+  },
+};
+
+function requireDeliverySetting(value: DeliverySetting | null | undefined): DeliverySetting {
+  if (value === undefined || value === null) return 'auto';
+  if (!DeliverySettings.includes(value)) throw new TypeError(`Pushizo: geçersiz ayar ekranı '${String(value)}'.`);
+  return value;
+}
+
+/**
+ * Android teslimat güçlendirme (ADR-0092): bazı üreticilerin pil/otomatik başlatma yöneticisi arka plandaki uygulamayı
+ * durdurduğu için bildirimler gecikir ya da gelmez. Bu API cihazdaki kısıtları okur ve kullanıcıyı ilgili ayar ekranına
+ * götürür. Yalnızca Android'de etkilidir: iOS'ta `status()` `supported: false` ve `risk: 'none'` döner, `openSettings`
+ * ile `showGuidance` hiçbir şey yapmadan `false` döner.
+ */
+const Delivery = {
+  /** Cihazın teslim durumu: üretici, ROM, pil muafiyeti, arka plan kısıtı, risk ve önerilen ayar ekranları. */
+  async status(): Promise<DeliveryStatus> {
+    return toDeliveryStatus((await nativeModule().deliveryStatus()) as RawMap);
+  },
+  /** Hazır açıklama diyaloğu şimdi gösterilmeli mi: teslim riski var ve diyalog son `minIntervalDays` günde gösterilmedi. */
+  async shouldShowGuidance(minIntervalDays = 14): Promise<boolean> {
+    if (!Number.isInteger(minIntervalDays) || minIntervalDays < 0) {
+      throw new RangeError('Pushizo: minIntervalDays negatif olmayan tam sayı olmalı.');
+    }
+    return (await nativeModule().deliveryShouldShowGuidance(minIntervalDays)) === true;
+  },
+  /**
+   * Ayar ekranını açar (`auto`: duruma en uygun ekran). Üreticiye özgü ekran bulunamazsa standart Android ekranına
+   * düşülür. Bir ekran açıldıysa `true`.
+   */
+  async openSettings(setting: DeliverySetting = 'auto'): Promise<boolean> {
+    return (await nativeModule().deliveryOpenSettings(requireDeliverySetting(setting))) === true;
+  },
+  /**
+   * Hazır açıklama diyaloğunu gösterir (22 dil; `message` verilirse SDK metni yerine o gösterilir). Kullanıcı kabul
+   * ederse `setting` ekranı açılır. Ayar ekranı açıldıysa `true`; kullanıcı vazgeçtiyse, ekran açılamadıysa ya da ön
+   * planda Activity yoksa `false`. SDK diyaloğu kendiliğinden göstermez; uygun anı uygulama seçer (`shouldShowGuidance`).
+   */
+  async showGuidance(options: DeliveryGuidanceOptions = {}): Promise<boolean> {
+    const message = options.message;
+    if (message !== undefined && message !== null && typeof message !== 'string') {
+      throw new TypeError('Pushizo: message metin olmalı.');
+    }
+    const text = typeof message === 'string' && message.trim() !== '' ? message : null;
+    return (await nativeModule().deliveryShowGuidance(requireDeliverySetting(options.setting), text)) === true;
+  },
 };
 
 const Debug = {
@@ -594,7 +929,7 @@ const Debug = {
  * çizimi yerel SDK'dadır.
  *
  * ```ts
- * Pushizo.initialize('app_…', { apiUrl: 'https://api.example.com' });
+ * Pushizo.initialize('app_…', { apiUrl: 'https://api.pushizo.com' });
  * await Pushizo.Notifications.requestPermission();
  * Pushizo.login('user_42');
  * Pushizo.User.addTag('plan', 'pro');
@@ -621,16 +956,22 @@ export const Pushizo = {
 
   /**
    * Anonim kullanıcıyı kimlikli kullanıcıya bağlar. Identity verification açıksa app moduna göre `identityHash`
-   * (eski imza: ikinci argüman metin) ve/veya JWT gerekir: `login(id, { jwt })`.
+   * (eski imza: ikinci argüman metin) ve/veya JWT gerekir: `login(id, { jwt })`. `profile` verilirse e-posta, SMS, tag
+   * ve alias'lar aynı çağrıda ayarlanır: `login(id, { profile: { email: 'ali@ornek.com' } })`.
    */
   login(externalId: string, proof?: string | LoginOptions): Promise<void> {
     const options: LoginOptions = typeof proof === 'string' ? { identityHash: proof } : (proof ?? {});
     if (options.jwt !== undefined) requireNonEmpty(options.jwt, 'jwt');
-    return nativeModule().login(
-      requireNonEmpty(externalId, 'externalId'),
-      options.identityHash ?? null,
-      options.jwt ?? null,
-    );
+    const id = requireNonEmpty(externalId, 'externalId');
+    if (options.profile !== undefined && options.profile !== null) {
+      // Profil (e-posta, SMS, tag, alias) girişle aynı yerel çağrıda ayarlanır; geçersiz adres girişten önce reddedilir.
+      return nativeModule().loginWithProfile(id, requireUserProfile(options.profile), options.identityHash ?? null, options.jwt ?? null);
+    }
+    return nativeModule().login(id, options.identityHash ?? null, options.jwt ?? null);
+  },
+  /** SDK başlatıldı mı (`initialize` tamamlandı ya da yerel otomatik başlatma yapıldı). */
+  async isInitialized(): Promise<boolean> {
+    return (await nativeModule().isInitialized()) === true;
   },
   /** Süresi dolan kimlik JWT'sini yeniler (giriş yapmış kullanıcı için); sonraki SDK istekleri yeni belirteci taşır. */
   updateUserJwt(jwt: string): Promise<void> {
@@ -648,11 +989,21 @@ export const Pushizo = {
   User,
   Notifications,
   InAppMessages,
+  /** Gömülü yerleşimler (ADR-0068). */
+  Placements,
+  /** Özellik bayrakları (ADR-0066). */
+  FeatureFlags,
   Inbox,
+  /** İçerik kartları (ADR-0082). */
+  ContentCards,
   /** Canlı sohbet (ADR-0040). */
   Chat,
   Session,
   LiveActivities,
   Location,
+  /** Mobil reklam kimliği (ADR-0037). */
+  Ads,
+  /** Android teslimat güçlendirme (ADR-0092). */
+  Delivery,
   Debug,
 };

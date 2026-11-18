@@ -79,6 +79,6 @@ dependencies {
     if (rootProject.findProject(":pushizo") != null) {
         api project(":pushizo")
     } else {
-        api "com.pushizo:pushizo-android:0.1.0"
+        api "com.pushizo:pushizo-android:0.3.0"
     }
 }

@@ -196,6 +196,14 @@ class PushizoModule(reactContext: ReactApplicationContext) : NativePushizoSpec(r
         impl.inboxUnreadCount(promise)
     }
 
+    override fun contentCardsList(limit: Double, promise: Promise) {
+        impl.contentCardsList(limit, promise)
+    }
+
+    override fun contentCardEvent(id: String, event: String, promise: Promise) {
+        impl.contentCardEvent(id, event, promise)
+    }
+
     override fun chatStart(name: String?, email: String?, language: String?, promise: Promise) {
         impl.chatStart(name, email, language, promise)
     }
@@ -278,6 +286,126 @@ class PushizoModule(reactContext: ReactApplicationContext) : NativePushizoSpec(r
 
     override fun requestLocationPermission(rationale: String?, promise: Promise) {
         impl.requestLocationPermission(rationale, promise)
+    }
+
+    override fun setGeofencingEnabled(enabled: Boolean) {
+        impl.setGeofencingEnabled(enabled)
+    }
+
+    override fun isGeofencingEnabled(promise: Promise) {
+        impl.isGeofencingEnabled(promise)
+    }
+
+    override fun deliveryStatus(promise: Promise) {
+        impl.deliveryStatus(promise)
+    }
+
+    override fun deliveryShouldShowGuidance(minIntervalDays: Double, promise: Promise) {
+        impl.deliveryShouldShowGuidance(minIntervalDays, promise)
+    }
+
+    override fun deliveryOpenSettings(setting: String, promise: Promise) {
+        impl.deliveryOpenSettings(setting, promise)
+    }
+
+    override fun deliveryShowGuidance(setting: String, message: String?, promise: Promise) {
+        impl.deliveryShowGuidance(setting, message, promise)
+    }
+
+    override fun featureFlagsRefresh(promise: Promise) {
+        impl.featureFlagsRefresh(promise)
+    }
+
+    override fun featureFlagsIsEnabled(key: String, defaultValue: Boolean, promise: Promise) {
+        impl.featureFlagsIsEnabled(key, defaultValue, promise)
+    }
+
+    override fun featureFlagsGetValue(key: String, promise: Promise) {
+        impl.featureFlagsGetValue(key, promise)
+    }
+
+    override fun placementsList(key: String, limit: Double, promise: Promise) {
+        impl.placementsList(key, limit, promise)
+    }
+
+    override fun placementsReportImpression(messageId: String) {
+        impl.placementsReportImpression(messageId)
+    }
+
+    override fun placementsReportClick(messageId: String, buttonId: String) {
+        impl.placementsReportClick(messageId, buttonId)
+    }
+
+    override fun placementsReportDismiss(messageId: String) {
+        impl.placementsReportDismiss(messageId)
+    }
+
+    override fun isInitialized(promise: Promise) {
+        impl.isInitialized(promise)
+    }
+
+    override fun loginWithProfile(externalId: String, profile: ReadableMap, identityHash: String?, jwt: String?, promise: Promise) {
+        impl.loginWithProfile(externalId, profile, identityHash, jwt, promise)
+    }
+
+    override fun setAdsPersonalizationConsent(granted: Boolean, promise: Promise) {
+        impl.setAdsPersonalizationConsent(granted, promise)
+    }
+
+    override fun getConsents(promise: Promise) {
+        impl.getConsents(promise)
+    }
+
+    override fun registerAdm(token: String, promise: Promise) {
+        impl.registerAdm(token, promise)
+    }
+
+    override fun setAdvertisingId(id: String?) {
+        impl.setAdvertisingId(id)
+    }
+
+    override fun setBadgeCount(count: Double, promise: Promise) {
+        impl.setBadgeCount(count, promise)
+    }
+
+    override fun getBadgeCount(promise: Promise) {
+        impl.getBadgeCount(promise)
+    }
+
+    override fun setUserProperty(key: String, property: ReadableMap, promise: Promise) {
+        impl.setUserProperty(key, property, promise)
+    }
+
+    override fun sendEventWithId(name: String, properties: ReadableMap, value: Double?, eventId: String) {
+        impl.sendEventWithId(name, properties, value, eventId)
+    }
+
+    override fun chatShow() {
+        impl.chatShow()
+    }
+
+    override fun chatHide(promise: Promise) {
+        impl.chatHide(promise)
+    }
+
+    override fun chatIsPresented(promise: Promise) {
+        impl.chatIsPresented(promise)
+    }
+
+    override fun chatIsListening(promise: Promise) {
+        impl.chatIsListening(promise)
+    }
+
+    override fun locationPermissionGranted(promise: Promise) {
+        impl.locationPermissionGranted(promise)
+    }
+
+    override fun locationBackgroundPermissionGranted(promise: Promise) {
+        impl.locationBackgroundPermissionGranted(promise)
+    }
+
+    override fun requestBackgroundLocationPermission(rationale: String?, promise: Promise) {
+        impl.requestBackgroundLocationPermission(rationale, promise)
     }
 
     override fun setLogLevel(level: String) {

@@ -1,10 +1,30 @@
+import {
+  type DeliveryRisk,
+  type DeliverySetting,
+  DeliverySettings,
+  type DeliveryStatus,
+} from './types';
 import type {
+  FeatureFlagValue,
+  InAppAction,
+  InAppBlock,
+  InAppButton,
+  InAppCarouselCard,
+  InAppDisplay,
+  InAppLayout,
+  InAppMessage,
+  InAppTrigger,
+  InboxChangeEvent,
+  ContentCard,
+  ContentCardFeed,
+  ContentCardType,
   InboxItem,
   InboxPage,
   NotificationData,
   PreferenceCategory,
   PushSubscriptionState,
   UserPreference,
+  UserConsent,
   UserPreferences,
 } from './types';
 
@@ -50,6 +70,57 @@ export function toSubscriptionState(raw: RawMap): PushSubscriptionState {
   return { id: str(m.id), token: str(m.token), optedIn: m.optedIn === true, permission: m.permission === true };
 }
 
+/** Teşhisin okunamadığı durum (iOS, başlatılmamış SDK): risk yok, öneri yok. */
+const UNSUPPORTED_DELIVERY_STATUS: DeliveryStatus = {
+  supported: false,
+  manufacturer: '',
+  brand: '',
+  vendor: 'other',
+  aggressiveVendor: false,
+  rom: '',
+  romVersion: null,
+  notificationsEnabled: true,
+  channelBlocked: false,
+  batteryOptimizationExempt: true,
+  backgroundRestricted: false,
+  standbyBucket: null,
+  powerSaveMode: false,
+  dataSaverEnabled: false,
+  restricted: false,
+  risk: 'none',
+  recommendedSettings: [],
+};
+
+/** Yerel teslim durumu (ADR-0092); `supported` true değilse desteklenmeyen platform durumu döner. */
+export function toDeliveryStatus(raw: RawMap): DeliveryStatus {
+  const m = raw ?? {};
+  if (m.supported !== true) return { ...UNSUPPORTED_DELIVERY_STATUS, recommendedSettings: [] };
+  const risk: DeliveryRisk = m.risk === 'high' || m.risk === 'elevated' ? m.risk : 'none';
+  // Yerel SDK'nın ileride ekleyeceği, bu sürümün tanımadığı ekran atlanır.
+  const recommendedSettings = toStringArray(m.recommendedSettings).filter(
+    (s): s is DeliverySetting => s !== 'auto' && (DeliverySettings as readonly string[]).includes(s),
+  );
+  return {
+    supported: true,
+    manufacturer: str(m.manufacturer) ?? '',
+    brand: str(m.brand) ?? '',
+    vendor: str(m.vendor) ?? 'other',
+    aggressiveVendor: m.aggressiveVendor === true,
+    rom: str(m.rom) ?? '',
+    romVersion: str(m.romVersion),
+    notificationsEnabled: m.notificationsEnabled !== false,
+    channelBlocked: m.channelBlocked === true,
+    batteryOptimizationExempt: m.batteryOptimizationExempt !== false,
+    backgroundRestricted: m.backgroundRestricted === true,
+    standbyBucket: str(m.standbyBucket),
+    powerSaveMode: m.powerSaveMode === true,
+    dataSaverEnabled: m.dataSaverEnabled === true,
+    restricted: m.restricted === true,
+    risk,
+    recommendedSettings,
+  };
+}
+
 export function toInboxItem(raw: RawMap): InboxItem {
   const m = raw ?? {};
   return {
@@ -68,6 +139,37 @@ export function toInboxItem(raw: RawMap): InboxItem {
   };
 }
 
+const CARD_TYPES: readonly ContentCardType[] = ['classic', 'captioned_image', 'image_only'];
+
+/** Kart (ADR-0082); bilinmeyen tür klasik sayılır (yerel SDK ile aynı). */
+export function toContentCard(raw: RawMap): ContentCard {
+  const m = raw ?? {};
+  const type = str(m.type);
+  return {
+    id: str(m.id) ?? '',
+    messageId: str(m.messageId),
+    type: type && (CARD_TYPES as readonly string[]).includes(type) ? (type as ContentCardType) : 'classic',
+    title: str(m.title),
+    body: str(m.body),
+    url: str(m.url),
+    imageUrl: str(m.imageUrl),
+    buttonText: str(m.buttonText),
+    data: toStringMap(m.data),
+    pinned: m.pinned === true,
+    priority: num(m.priority) ?? 0,
+    viewed: m.viewed === true,
+    clicked: m.clicked === true,
+    expiresAt: num(m.expiresAt),
+    createdAt: num(m.createdAt),
+  };
+}
+
+export function toContentCardFeed(raw: RawMap): ContentCardFeed {
+  const m = raw ?? {};
+  const cards = Array.isArray(m.cards) ? (m.cards as RawMap[]).map(toContentCard) : [];
+  return { cards, unviewedCount: num(m.unviewedCount) ?? cards.filter((c) => !c.viewed).length };
+}
+
 export function toInboxPage(raw: RawMap): InboxPage {
   const m = raw ?? {};
   const items = Array.isArray(m.items) ? (m.items as RawMap[]).map(toInboxItem) : [];
@@ -76,6 +178,17 @@ export function toInboxPage(raw: RawMap): InboxPage {
 
 const isMap = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const INBOX_CHANGE_TYPES: readonly InboxChangeEvent['type'][] = ['listed', 'read', 'read_all', 'archived', 'count'];
+
+/** Yerel kutu değişim olayı; tanınmayan tür `count` sayılır, `itemId` yalnızca metin geldiyse eklenir. */
+export function toInboxChangeEvent(raw: RawMap): InboxChangeEvent {
+  const m = raw ?? {};
+  const type = INBOX_CHANGE_TYPES.find((t) => t === m.type) ?? 'count';
+  const itemId = str(m.itemId);
+  const unreadCount = Math.max(0, Math.trunc(num(m.unreadCount) ?? 0));
+  return itemId === null ? { type, unreadCount } : { type, itemId, unreadCount };
+}
 
 /** Kategorisiz kayıt için `null` (yerel SDK ayrıştırıcısıyla aynı: geçersiz kayıt atlanır); boş kanal = tüm kanallar. */
 export function toUserPreference(raw: RawMap): UserPreference | null {
@@ -110,5 +223,160 @@ export function toUserPreferences(raw: RawMap): UserPreferences {
   const m = raw ?? {};
   const list = <T>(value: unknown, map: (r: RawMap) => T | null): T[] =>
     Array.isArray(value) ? value.filter(isMap).map(map).filter((v): v is T => v !== null) : [];
-  return { preferences: list(m.preferences, toUserPreference), categories: list(m.categories, toPreferenceCategory) };
+  return {
+    preferences: list(m.preferences, toUserPreference),
+    categories: list(m.categories, toPreferenceCategory),
+    consents: list(m.consents, toUserConsent),
+  };
+}
+
+/** Amaçsız rıza kaydı için `null` (yerel SDK ayrıştırıcısıyla aynı: geçersiz kayıt atlanır). */
+export function toUserConsent(raw: RawMap): UserConsent | null {
+  const m = raw ?? {};
+  const purpose = str(m.purpose);
+  if (!purpose) return null;
+  return { purpose, granted: m.granted === true, source: str(m.source), updatedAt: num(m.updatedAt) };
+}
+
+export function toUserConsents(raw: unknown): UserConsent[] {
+  return Array.isArray(raw) ? raw.filter(isMap).map(toUserConsent).filter((v): v is UserConsent => v !== null) : [];
+}
+
+/** `featureFlagsGetValue` zarfındaki (`{ value }`) değer; değer yoksa veya `null` ise `undefined`. */
+export function toFeatureFlagValue(raw: RawMap): FeatureFlagValue | undefined {
+  const value = raw?.value;
+  return value === undefined || value === null ? undefined : (value as FeatureFlagValue);
+}
+
+const LAYOUTS: readonly string[] = ['modal', 'banner_top', 'banner_bottom', 'fullscreen'];
+const maps = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.filter(isMap) : []);
+
+function toInAppTrigger(m: Record<string, unknown>): InAppTrigger {
+  switch (m.kind) {
+    case 'session_start':
+      return { kind: 'session_start' };
+    case 'session_duration':
+      return { kind: 'session_duration', seconds: num(m.seconds) ?? 0 };
+    case 'event':
+      return { kind: 'event', name: str(m.name) ?? '' };
+    case 'screen':
+      return { kind: 'screen', name: str(m.name) ?? '' };
+    case 'trigger':
+      return { kind: 'trigger', key: str(m.key) ?? '', op: str(m.op) ?? '', value: str(m.value) ?? num(m.value) };
+    default:
+      return { kind: 'unsupported', name: str(m.name) ?? '' };
+  }
+}
+
+function toInAppAction(raw: unknown): InAppAction {
+  const m = isMap(raw) ? raw : {};
+  switch (m.type) {
+    case 'url':
+      return { type: 'url', url: str(m.url) ?? '' };
+    case 'deeplink':
+      return { type: 'deeplink', url: str(m.url) ?? '' };
+    case 'tags':
+      return { type: 'tags', tags: toStringMap(m.tags) };
+    case 'push_prompt':
+      return { type: 'push_prompt' };
+    case 'outcome':
+      return { type: 'outcome', name: str(m.name) ?? '', value: num(m.value) };
+    default:
+      return { type: 'dismiss' };
+  }
+}
+
+function toInAppButton(m: Record<string, unknown>): InAppButton {
+  return {
+    id: str(m.id) ?? '',
+    text: str(m.text) ?? '',
+    action: toInAppAction(m.action),
+    backgroundColor: str(m.backgroundColor),
+    textColor: str(m.textColor),
+  };
+}
+
+function toInAppCard(m: Record<string, unknown>): InAppCarouselCard {
+  return {
+    id: str(m.id) ?? '',
+    title: str(m.title) ?? '',
+    body: str(m.body),
+    imageUrl: str(m.imageUrl),
+    imageAlt: str(m.imageAlt),
+    button: isMap(m.button) ? toInAppButton(m.button) : null,
+  };
+}
+
+/** Tanınmayan blok türü için `null` (yerel ayrıştırıcıyla aynı: ileri uyumluluk için atlanır). */
+function toInAppBlock(m: Record<string, unknown>): InAppBlock | null {
+  switch (m.type) {
+    case 'image':
+      return { type: 'image', url: str(m.url) ?? '', alt: str(m.alt) };
+    case 'title':
+      return { type: 'title', text: str(m.text) ?? '' };
+    case 'body':
+      return { type: 'body', text: str(m.text) ?? '' };
+    case 'button':
+      return { type: 'button', ...toInAppButton(m) };
+    case 'carousel':
+      return { type: 'carousel', id: str(m.id) ?? '', cards: maps(m.cards).map(toInAppCard) };
+    default:
+      return null;
+  }
+}
+
+function toInAppDisplay(raw: unknown): InAppDisplay {
+  const m = isMap(raw) ? raw : {};
+  const blocks = maps(m.blocks)
+    .map(toInAppBlock)
+    .filter((b): b is InAppBlock => b !== null);
+  const buttons = blocks.flatMap((block): InAppButton[] => {
+    if (block.type === 'button') {
+      return [{ id: block.id, text: block.text, action: block.action, backgroundColor: block.backgroundColor, textColor: block.textColor }];
+    }
+    if (block.type === 'carousel') return block.cards.flatMap((card) => (card.button ? [card.button] : []));
+    return [];
+  });
+  return {
+    layout: (LAYOUTS.includes(m.layout as string) ? m.layout : 'modal') as InAppLayout,
+    backgroundColor: str(m.backgroundColor),
+    textColor: str(m.textColor),
+    dismissible: m.dismissible !== false,
+    autoDismissSeconds: num(m.autoDismissSeconds),
+    contentType: m.contentType === 'html' ? 'html' : 'blocks',
+    html: str(m.html),
+    htmlHeight: num(m.htmlHeight),
+    blocks,
+    buttons,
+  };
+}
+
+/** Kimliksiz kayıt için `null` (rapor çağrıları kimlikle eşlenir). */
+export function toInAppMessage(raw: RawMap): InAppMessage | null {
+  const m = raw ?? {};
+  const id = str(m.id);
+  if (!id) return null;
+  const triggerGroups = (Array.isArray(m.triggerGroups) ? m.triggerGroups : []).map((group) => maps(group).map(toInAppTrigger));
+  return {
+    id,
+    priority: num(m.priority) ?? 0,
+    triggers: maps(m.triggers).map(toInAppTrigger),
+    triggerGroups,
+    variantId: str(m.variantId),
+    display: toInAppDisplay(m.display),
+    remainingImpressions: num(m.remainingImpressions) ?? 1,
+    minIntervalSeconds: num(m.minIntervalSeconds) ?? 0,
+    stopAfterInteraction: m.stopAfterInteraction === true,
+    lastImpressionAt: num(m.lastImpressionAt),
+    endAt: num(m.endAt),
+    language: str(m.language),
+    raw: isMap(m.raw) ? m.raw : {},
+  };
+}
+
+/** Dizi olmayan yerel sonuç boş listeye düşer; kimliksiz kayıt atlanır. */
+export function toInAppMessages(value: unknown): InAppMessage[] {
+  return maps(value)
+    .map(toInAppMessage)
+    .filter((message): message is InAppMessage => message !== null);
 }
